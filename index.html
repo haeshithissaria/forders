@@ -184,6 +184,35 @@
         const syncStatusEl = document.getElementById('sync-status');
         const sessionCountEl = document.getElementById('session-count');
 
+        // --- HELPER: LOCAL DATE STRING GENERATOR ---
+        // Prevents midnight timezone bugs. Returns YYYY-MM-DD
+        function getLocalDateKey(dateObj = new Date()) {
+            const y = dateObj.getFullYear();
+            const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+            const d = String(dateObj.getDate()).padStart(2, '0');
+            return `${y}-${m}-${d}`;
+        }
+
+        // --- AUTO-CLEANUP LOGIC (15 DAYS) ---
+        function cleanUpOldDates(snapshotVal, mode) {
+            if (!snapshotVal) return;
+            
+            // Generate cutoff date (15 days ago)
+            const cutoffDate = new Date();
+            cutoffDate.setDate(cutoffDate.getDate() - 15);
+            const cutoffDateStr = getLocalDateKey(cutoffDate); 
+
+            // Firebase structure is warehouse/{mode}/{dateKey}
+            Object.keys(snapshotVal).forEach(dateKey => {
+                // Because dates are formatted YYYY-MM-DD, strict string comparison works perfectly
+                if (dateKey < cutoffDateStr) {
+                    remove(ref(db, `warehouse/${mode}/${dateKey}`))
+                        .then(() => console.log(`Auto-deleted old 15+ days data for: ${dateKey}`))
+                        .catch(e => console.error(e));
+                }
+            });
+        }
+
         function getMergedData(mode) {
             const pendingList = mode === 'outward' ? pendingOutward : pendingInward;
             const fbList = firebaseData[mode] || [];
@@ -215,7 +244,7 @@
             return items;
         }
 
-        // Firebase Sync Listeners
+        // Firebase Sync Listeners (Triggers auto-cleanup automatically)
         onValue(ref(db, '.info/connected'), (snapshot) => {
             if (snapshot.val() === true) {
                 syncStatusEl.innerText = "☁️ Firebase Connected";
@@ -227,12 +256,16 @@
         });
 
         onValue(ref(db, 'warehouse/outward'), (snapshot) => {
-            firebaseData.outward = flattenFirebaseData(snapshot.val());
+            const val = snapshot.val();
+            cleanUpOldDates(val, 'outward'); // Call cleanup dynamically
+            firebaseData.outward = flattenFirebaseData(val);
             updateUI();
         });
         
         onValue(ref(db, 'warehouse/inward'), (snapshot) => {
-            firebaseData.inward = flattenFirebaseData(snapshot.val());
+            const val = snapshot.val();
+            cleanUpOldDates(val, 'inward'); // Call cleanup dynamically
+            firebaseData.inward = flattenFirebaseData(val);
             updateUI();
         });
 
@@ -426,8 +459,9 @@
                 }
 
                 const now = new Date();
+                const dateKey = getLocalDateKey(now); 
                 const newItem = {
-                    dateKey: now.toISOString().split('T')[0],
+                    dateKey: dateKey,
                     date: now.toLocaleDateString(),
                     time: now.toLocaleTimeString(),
                     timestamp: now.getTime(),
@@ -505,7 +539,7 @@
 
         function renderStats() {
             const statsEl = document.getElementById('courier-stats');
-            const todayKey = new Date().toISOString().split('T')[0];
+            const todayKey = getLocalDateKey();
             const todaysItems = getMergedData(currentMode).filter(i => i.dateKey === todayKey);
 
             if (todaysItems.length === 0) {
@@ -533,7 +567,7 @@
         }
 
         function updateGlobalCounts() {
-            const todayKey = new Date().toISOString().split('T')[0];
+            const todayKey = getLocalDateKey();
             document.getElementById('outward-count').innerText = getMergedData('outward').filter(i => i.dateKey === todayKey).length;
             document.getElementById('inward-count').innerText = getMergedData('inward').filter(i => i.dateKey === todayKey).length;
         }
@@ -635,7 +669,7 @@
 
         window.exportCSV = () => window.downloadDateRangeReport(currentMode);
         
-        // --- UPDATED EXPORT LOGIC FOR 20-ROW GAP IN INWARD ---
+        // --- CSV EXPORT WITH 20-ROW GAP RULE FOR INWARD ---
         window.downloadDateRangeReport = (mode) => {
             const sDate = document.getElementById('filter-start-date').value;
             const eDate = document.getElementById('filter-end-date').value;
@@ -653,15 +687,15 @@
             filtered.forEach((i, idx) => {
                 csv += `${filtered.length - idx},${i.date},${i.seller || 'N/A'},${i.courier},${i.awb},${i.time}\n`;
                 
-                // INWARD CONDITION: Add a blank line after every 20 records (but not at the very end of the file)
+                // Gap rule: In INWARD mode, add an empty row after every 20 entries
                 if (mode === 'inward' && (idx + 1) % 20 === 0 && (idx + 1) !== filtered.length) {
-                    csv += ",,,,,\n"; // 5 commas creates empty columns matching the header format
+                    csv += ",,,,,\n"; 
                 }
             });
             
             const link = document.createElement("a"); 
             link.setAttribute("href", encodeURI("data:text/csv;charset=utf-8," + csv));
-            link.setAttribute("download", `warehouse_report_${mode}_${new Date().toISOString().split('T')[0]}.csv`);
+            link.setAttribute("download", `warehouse_report_${mode}_${getLocalDateKey()}.csv`);
             document.body.appendChild(link); link.click(); document.body.removeChild(link);
         };
 

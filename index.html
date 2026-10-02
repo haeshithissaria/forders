@@ -269,7 +269,7 @@
             updateGlobalCounts();
         }
 
-        // Auto-Sync Background Worker
+        // Auto-Sync Background Worker (FIFO Order)
         async function syncWorker() {
             let totalPending = pendingOutward.length + pendingInward.length + pendingDeletions.length;
             if (totalPending === 0) {
@@ -464,10 +464,11 @@
                     badgeClass: courierInfo.class
                 };
 
+                // Use .push() instead of .unshift() for correct FIFO queue behavior
                 if (currentMode === 'outward') {
-                    pendingOutward.unshift(newItem);
+                    pendingOutward.push(newItem);
                 } else {
-                    pendingInward.unshift(newItem);
+                    pendingInward.push(newItem);
                 }
                 
                 saveLocalQueues();
@@ -570,6 +571,7 @@
             scanMessage.className = `mt-3 text-sm font-bold h-auto ${colorClass} inline-block`;
         }
 
+        // Louder & Sharper Error Buzzer
         function playSound(type) {
             const ctx = new (window.AudioContext || window.webkitAudioContext)();
             const osc = ctx.createOscillator();
@@ -583,15 +585,18 @@
                 osc.frequency.exponentialRampToValueAtTime(1200, ctx.currentTime + 0.1);
                 gain.gain.setValueAtTime(0.1, ctx.currentTime); 
                 gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.1);
+                osc.start(ctx.currentTime); 
+                osc.stop(ctx.currentTime + 0.2);
             } else {
+                // Louder sawtooth buzzer for duplicates and failures
                 osc.type = 'sawtooth'; 
-                osc.frequency.setValueAtTime(300, ctx.currentTime);
-                osc.frequency.exponentialRampToValueAtTime(100, ctx.currentTime + 0.2);
-                gain.gain.setValueAtTime(0.2, ctx.currentTime); 
-                gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.2);
+                osc.frequency.setValueAtTime(260, ctx.currentTime);
+                osc.frequency.setValueAtTime(140, ctx.currentTime + 0.15);
+                gain.gain.setValueAtTime(0.6, ctx.currentTime); // Increased gain for loudness
+                gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+                osc.start(ctx.currentTime); 
+                osc.stop(ctx.currentTime + 0.3);
             }
-            osc.start(ctx.currentTime); 
-            osc.stop(ctx.currentTime + 0.2);
         }
 
         // --- GLOBAL EXPORTS ---

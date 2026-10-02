@@ -174,7 +174,10 @@
         let pendingOutward = JSON.parse(localStorage.getItem('wh_pendingOutward') || '[]');
         let pendingInward = JSON.parse(localStorage.getItem('wh_pendingInward') || '[]');
         let pendingDeletions = JSON.parse(localStorage.getItem('wh_pendingDeletions') || '[]');
-        let sessionCount = parseInt(localStorage.getItem('warehouse_session_count') || '0');
+        
+        // Independent Session Counters
+        let sessionCountOutward = parseInt(localStorage.getItem('wh_session_outward') || '0');
+        let sessionCountInward = parseInt(localStorage.getItem('wh_session_inward') || '0');
 
         const awbInput = document.getElementById('awb-input');
         const scanMessage = document.getElementById('scan-message');
@@ -281,15 +284,22 @@
             syncStatusEl.innerText = `🔄 Auto-Syncing (${totalPending})...`;
             syncStatusEl.className = "text-xs bg-blue-500 text-white font-bold px-2.5 py-1 rounded-full animate-pulse";
 
+            // Process Deletions
             while(pendingDeletions.length > 0) {
                 let item = pendingDeletions[0];
+                let delPath = item.deleteFrom === 'inward' ? 'inward' : 'outward';
+                
+                // Fallback for legacy items before deleteFrom was added
+                if (!item.deleteFrom) { delPath = 'outward'; }
+                
                 try {
-                    await remove(ref(db, `warehouse/outward/${item.dateKey}/${item.courier}/${item.seller}/${item.awb}`));
+                    await remove(ref(db, `warehouse/${delPath}/${item.dateKey}/${item.courier}/${item.seller}/${item.awb}`));
                     pendingDeletions.shift();
                     saveLocalQueues();
                 } catch(e) { break; }
             }
 
+            // Process Outwards
             while(pendingOutward.length > 0) {
                 let item = pendingOutward[0];
                 try {
@@ -299,6 +309,7 @@
                 } catch(e) { break; }
             }
 
+            // Process Inwards
             while(pendingInward.length > 0) {
                 let item = pendingInward[0];
                 try {
@@ -371,38 +382,32 @@
                 scanMessage.className = "mt-3 text-sm font-medium h-5";
 
                 let awb = this.value.toUpperCase().split('|')[0].replace(/[^A-Z0-9]/g, "").trim();
-                
                 if (awb === '') return;
                 
-                const mergedCurrent = getMergedData(currentMode);
                 const currentSeller = sellerSelect.value;
-
-                // Duplicate Prevention
-                const existingItem = mergedCurrent.find(i => i.awb === awb);
-                if (existingItem) {
-                    showMessage(`❌ FAILED: Duplicate! Already scanned on ${existingItem.date} at ${existingItem.time}`, 'text-red-600 bg-red-100 px-3 py-1 rounded');
-                    playSound('error');
-                    this.value = '';
-                    this.focus();
-                    return; 
-                }
-
-                // Marketplace Mismatch Check
-                if (currentMode === 'outward' && !verifyMarketplaceMatch(awb, currentSeller)) {
-                    playSound('error');
-                    showMessage(`❌ Mismatch! This AWB format does not match the active Marketplace.`, 'text-red-600 bg-red-100 px-3 py-1 rounded');
-                    this.value = '';
-                    this.focus();
-                    return;
-                }
-
-                let finalSeller = currentMode === 'outward' ? currentSeller : "N/A";
                 const courierInfo = detectCourier(awb);
+                let finalSeller = currentMode === 'outward' ? currentSeller : "N/A";
                 let customMsg = `✅ Success: ${awb}`;
                 let colorClass = 'text-green-600 bg-green-100 px-3 py-1 rounded';
 
-                // Auto-Select Seller
                 if (currentMode === 'outward') {
+                    // Marketplace Mismatch Check
+                    if (!verifyMarketplaceMatch(awb, currentSeller)) {
+                        playSound('error');
+                        showMessage(`❌ Mismatch! This AWB format does not match the active Marketplace.`, 'text-red-600 bg-red-100 px-3 py-1 rounded');
+                        this.value = ''; this.focus(); return;
+                    }
+
+                    // Duplicate Prevention
+                    const outwardMerged = getMergedData('outward');
+                    const existingOutward = outwardMerged.find(i => i.awb === awb);
+                    if (existingOutward) {
+                        showMessage(`❌ FAILED: Duplicate! Already scanned in Outward on ${existingOutward.date} at ${existingOutward.time}`, 'text-red-600 bg-red-100 px-3 py-1 rounded');
+                        playSound('duplicate');
+                        this.value = ''; this.focus(); return; 
+                    }
+
+                    // Auto-Select Seller Logic
                     if (awb.startsWith('AJI') || awb.endsWith('AJI')) sellerSelect.value = 'Ajio';
                     else if (awb.startsWith('LM') || awb.endsWith('LI')) sellerSelect.value = 'LimeRoad';
                     else if (awb.startsWith('NK') || awb.endsWith('NYK')) sellerSelect.value = 'Nykaa';
@@ -418,37 +423,57 @@
                     if (finalSeller === 'Amazon' && courierInfo.name !== 'ATS') {
                         playSound('error');
                         showMessage('❌ Mismatch: Amazon seller can only accept ATS barcodes.', 'text-red-600 bg-red-100 px-3 py-1 rounded');
-                        this.value = '';
-                        this.focus();
-                        return;
+                        this.value = ''; this.focus(); return;
                     }
-                }
 
-                // Inward Recovery Logic
-                if (currentMode === 'inward') {
+                    // Re-Outward Restoration (Rule: If it was in Inward, remove it from Inward)
+                    const inwardMerged = getMergedData('inward');
+                    const inwardMatch = inwardMerged.find(item => item.awb === awb);
+                    
+                    if (inwardMatch) {
+                        const pIndex = pendingInward.findIndex(i => i.awb === awb);
+                        if(pIndex > -1) {
+                            pendingInward.splice(pIndex, 1);
+                        } else {
+                            inwardMatch.deleteFrom = 'inward'; // Tells worker to delete from inward
+                            pendingDeletions.push(inwardMatch);
+                        }
+                        customMsg = `🔄 Restored to Outward & Removed from Inward: ${awb}`;
+                        colorClass = 'text-blue-700 bg-blue-100 px-3 py-1 rounded';
+                    }
+
+                } else if (currentMode === 'inward') {
+                    // Strict Inward Validation (Rule: Must exist in Outward)
                     const outwardMerged = getMergedData('outward');
                     const outwardMatch = outwardMerged.find(item => item.awb === awb);
                     
-                    if (outwardMatch) {
-                        finalSeller = outwardMatch.seller;
-                        const pIndex = pendingOutward.findIndex(i => i.awb === awb);
-                        if(pIndex > -1) {
-                            pendingOutward.splice(pIndex, 1);
-                        } else {
-                            pendingDeletions.push(outwardMatch);
-                        }
-                        customMsg = `🔄 Recovered & Removed from Outward: ${awb}`;
-                        colorClass = 'text-blue-700 bg-blue-100 px-3 py-1 rounded';
-                    } else {
-                        if (awb.startsWith('MY') && !awb.startsWith('MYSFXHL')) finalSeller = 'Myntra';
-                        else if (awb.startsWith('FM') || awb.startsWith('FMPP')) finalSeller = 'Flipkart';
-                        else if (awb.startsWith('VL')) finalSeller = 'Meesho';
-                        else if (/^\d{12}$/.test(awb)) finalSeller = 'Amazon';
-                        else if (awb.startsWith('AJI') || awb.endsWith('AJI')) finalSeller = 'Ajio';
-                        else if (awb.startsWith('LM') || awb.endsWith('LI')) finalSeller = 'LimeRoad';
-                        else if (awb.startsWith('NK') || awb.endsWith('NYK')) finalSeller = 'Nykaa';
-                        else if (awb.startsWith('CLQ')) finalSeller = 'TataCliq';
+                    if (!outwardMatch) {
+                        playSound('error');
+                        showMessage(`❌ ERROR: AWB not found in Outward. Cannot Inward.`, 'text-red-600 bg-red-100 px-3 py-1 rounded');
+                        this.value = ''; this.focus(); return;
                     }
+
+                    // Duplicate Prevention in Inward
+                    const inwardMerged = getMergedData('inward');
+                    const existingInward = inwardMerged.find(i => i.awb === awb);
+                    if (existingInward) {
+                        showMessage(`❌ FAILED: Duplicate! Already in Inward on ${existingInward.date} at ${existingInward.time}`, 'text-red-600 bg-red-100 px-3 py-1 rounded');
+                        playSound('duplicate');
+                        this.value = ''; this.focus(); return; 
+                    }
+
+                    finalSeller = outwardMatch.seller;
+                    
+                    // Remove from Outward
+                    const pIndex = pendingOutward.findIndex(i => i.awb === awb);
+                    if(pIndex > -1) {
+                        pendingOutward.splice(pIndex, 1);
+                    } else {
+                        outwardMatch.deleteFrom = 'outward'; // Tells worker to delete from outward
+                        pendingDeletions.push(outwardMatch);
+                    }
+                    customMsg = `🔄 Recovered & Removed from Outward: ${awb}`;
+                    colorClass = 'text-blue-700 bg-blue-100 px-3 py-1 rounded';
                 }
 
                 const now = new Date();
@@ -464,19 +489,20 @@
                     badgeClass: courierInfo.class
                 };
 
-                // Use .push() instead of .unshift() for correct FIFO queue behavior
+                // Store based on mode and update Independent Counters
                 if (currentMode === 'outward') {
                     pendingOutward.push(newItem);
+                    sessionCountOutward++;
+                    localStorage.setItem('wh_session_outward', sessionCountOutward);
+                    sessionCountEl.innerText = sessionCountOutward;
                 } else {
                     pendingInward.push(newItem);
+                    sessionCountInward++;
+                    localStorage.setItem('wh_session_inward', sessionCountInward);
+                    sessionCountEl.innerText = sessionCountInward;
                 }
                 
                 saveLocalQueues();
-                
-                sessionCount++;
-                sessionCountEl.innerText = sessionCount;
-                localStorage.setItem('warehouse_session_count', sessionCount);
-
                 updateUI(); 
                 showMessage(customMsg, colorClass);
                 playSound('success');
@@ -571,7 +597,6 @@
             scanMessage.className = `mt-3 text-sm font-bold h-auto ${colorClass} inline-block`;
         }
 
-        // Louder & Sharper Error Buzzer
         function playSound(type) {
             const ctx = new (window.AudioContext || window.webkitAudioContext)();
             const osc = ctx.createOscillator();
@@ -580,6 +605,7 @@
             gain.connect(ctx.destination);
 
             if (type === 'success') {
+                // Pleasant ping for successful scan
                 osc.type = 'sine'; 
                 osc.frequency.setValueAtTime(800, ctx.currentTime);
                 osc.frequency.exponentialRampToValueAtTime(1200, ctx.currentTime + 0.1);
@@ -587,12 +613,23 @@
                 gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.1);
                 osc.start(ctx.currentTime); 
                 osc.stop(ctx.currentTime + 0.2);
+            } else if (type === 'duplicate') {
+                // Distinct double-beep (uh-oh) using a square wave for duplicates
+                osc.type = 'square'; 
+                osc.frequency.setValueAtTime(350, ctx.currentTime);
+                osc.frequency.setValueAtTime(250, ctx.currentTime + 0.15);
+                gain.gain.setValueAtTime(0.5, ctx.currentTime); 
+                gain.gain.setValueAtTime(0.01, ctx.currentTime + 0.1); // Brief pause to create 2 distinct beeps
+                gain.gain.setValueAtTime(0.5, ctx.currentTime + 0.15); 
+                gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.35);
+                osc.start(ctx.currentTime); 
+                osc.stop(ctx.currentTime + 0.35);
             } else {
-                // Louder sawtooth buzzer for duplicates and failures
+                // Single loud harsh buzz for standard errors (mismatch/missing)
                 osc.type = 'sawtooth'; 
                 osc.frequency.setValueAtTime(260, ctx.currentTime);
                 osc.frequency.setValueAtTime(140, ctx.currentTime + 0.15);
-                gain.gain.setValueAtTime(0.6, ctx.currentTime); // Increased gain for loudness
+                gain.gain.setValueAtTime(0.6, ctx.currentTime); 
                 gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
                 osc.start(ctx.currentTime); 
                 osc.stop(ctx.currentTime + 0.3);
@@ -607,6 +644,10 @@
             document.getElementById('btn-inward').className = mode === 'inward' ? "flex-1 py-4 text-center font-bold text-lg border-b-4 border-blue-500 bg-blue-50 text-blue-700" : "flex-1 py-4 text-center font-bold text-lg border-b-4 border-transparent text-gray-500 hover:bg-gray-50";
             document.getElementById('current-mode-label').innerText = mode.toUpperCase();
             document.getElementById('seller-container').style.display = mode === 'outward' ? 'block' : 'none';
+            
+            // Switch session counter display
+            sessionCountEl.innerText = mode === 'outward' ? sessionCountOutward : sessionCountInward;
+            
             updateUI(); 
             awbInput.focus();
         };
@@ -627,9 +668,14 @@
         };
 
         window.resetSessionCount = () => { 
-            if(confirm("Are you sure you want to reset the session count to 0?")) { 
-                sessionCount = 0; 
-                localStorage.setItem('warehouse_session_count', 0); 
+            if(confirm(`Are you sure you want to reset the ${currentMode.toUpperCase()} session count to 0?`)) { 
+                if (currentMode === 'outward') {
+                    sessionCountOutward = 0; 
+                    localStorage.setItem('wh_session_outward', 0); 
+                } else {
+                    sessionCountInward = 0; 
+                    localStorage.setItem('wh_session_inward', 0); 
+                }
                 sessionCountEl.innerText = 0; 
             }
         };
@@ -684,7 +730,6 @@
             filtered.forEach((i, idx) => {
                 csv += `${filtered.length - idx},${i.date},${i.seller || 'N/A'},${i.courier},${i.awb},${i.time}\n`;
                 
-                // Gap rule: In INWARD mode, add an empty row after every 20 entries
                 if (mode === 'inward' && (idx + 1) % 20 === 0 && (idx + 1) !== filtered.length) {
                     csv += ",,,,,\n"; 
                 }
@@ -698,7 +743,6 @@
 
         window.onload = () => { 
             window.setMode('outward'); 
-            sessionCountEl.innerText = sessionCount; 
 
             // Initialize default date range for the reports (Last 15 days to Today)
             const endDateInput = document.getElementById('filter-end-date');

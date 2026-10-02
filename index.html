@@ -478,9 +478,16 @@
 
                 const now = new Date();
                 const dateKey = getLocalDateKey(now); 
+                
+                // FORMATTED DATE AS dd-mm-yyyy
+                const d = String(now.getDate()).padStart(2, '0');
+                const m = String(now.getMonth() + 1).padStart(2, '0');
+                const y = now.getFullYear();
+                const formattedDate = `${d}-${m}-${y}`;
+
                 const newItem = {
                     dateKey: dateKey,
-                    date: now.toLocaleDateString(),
+                    date: formattedDate, // <--- UPDATE APPLIED HERE
                     time: now.toLocaleTimeString(),
                     timestamp: now.getTime(),
                     courier: courierInfo.name,
@@ -720,7 +727,8 @@
 
             if (sDate && eDate) {
                 const start = new Date(sDate); const end = new Date(eDate); end.setHours(23, 59, 59);
-                filtered = filtered.filter(i => { let idt = new Date(i.date); return idt >= start && idt <= end; });
+                // UPDATE: Parsing with item.dateKey instead of item.date so JS reads it correctly
+                filtered = filtered.filter(i => { let idt = new Date(i.dateKey); return idt >= start && idt <= end; });
             }
 
             if (filtered.length === 0) { alert('No records found for the selected date range.'); return; }

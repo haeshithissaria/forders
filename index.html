@@ -170,6 +170,7 @@
 
         let currentMode = 'outward'; 
         let firebaseData = { outward: [], inward: [] };
+        let isSyncing = false; // NEW SYNC LOCK
         
         let pendingOutward = JSON.parse(localStorage.getItem('wh_pendingOutward') || '[]');
         let pendingInward = JSON.parse(localStorage.getItem('wh_pendingInward') || '[]');
@@ -234,8 +235,9 @@
 
         onValue(ref(db, '.info/connected'), (snapshot) => {
             if (snapshot.val() === true) {
-                syncStatusEl.innerText = "☁️️ Firebase Connected";
+                syncStatusEl.innerText = "☁ Firebase Connected";
                 syncStatusEl.className = "text-xs bg-green-500 text-white font-bold px-2.5 py-1 rounded-full";
+                syncWorker(); // Trigger sync automatically when reconnected
             } else {
                 syncStatusEl.innerText = "⏳ Offline (Cached)";
                 syncStatusEl.className = "text-xs bg-yellow-400 text-gray-900 font-bold px-2.5 py-1 rounded-full";
@@ -262,44 +264,63 @@
             updateGlobalCounts();
         }
 
+        // NEW ASYNC EVENT-DRIVEN SYNC WORKER
         async function syncWorker() {
-            let totalPending = pendingOutward.length + pendingInward.length + pendingDeletions.length;
-            if (totalPending === 0) {
-                syncStatusEl.innerText = "☁️ Synced";
-                syncStatusEl.className = "text-xs bg-green-500 text-white font-bold px-2.5 py-1 rounded-full";
-                return;
-            }
+            if (isSyncing) return; // Prevent multiple sync instances from clashing
+            isSyncing = true;
 
-            syncStatusEl.innerText = `🔄 Auto-Syncing (${totalPending})...`;
-            syncStatusEl.className = "text-xs bg-blue-500 text-white font-bold px-2.5 py-1 rounded-full animate-pulse";
+            try {
+                while(true) {
+                    let totalPending = pendingOutward.length + pendingInward.length + pendingDeletions.length;
+                    if (totalPending === 0) break; // End loop if nothing left
 
-            while(pendingDeletions.length > 0) {
-                let item = pendingDeletions[0];
-                let delPath = item.deleteFrom === 'inward' ? 'inward' : 'outward';
-                if (!item.deleteFrom) { delPath = 'outward'; }
-                try {
-                    await remove(ref(db, `warehouse/${delPath}/${item.dateKey}/${item.courier}/${item.seller}/${item.awb}`));
-                    pendingDeletions.shift(); saveLocalQueues();
-                } catch(e) { break; }
+                    syncStatusEl.innerText = `🔄 Auto-Syncing (${totalPending})...`;
+                    syncStatusEl.className = "text-xs bg-blue-500 text-white font-bold px-2.5 py-1 rounded-full animate-pulse";
+
+                    if (pendingDeletions.length > 0) {
+                        let item = pendingDeletions[0];
+                        let delPath = item.deleteFrom === 'inward' ? 'inward' : 'outward';
+                        if (!item.deleteFrom) { delPath = 'outward'; }
+                        await remove(ref(db, `warehouse/${delPath}/${item.dateKey}/${item.courier}/${item.seller}/${item.awb}`));
+                        pendingDeletions.shift(); 
+                        saveLocalQueues();
+                        updateUI(); // Live UI Update
+                        continue;
+                    }
+                    if (pendingOutward.length > 0) {
+                        let item = pendingOutward[0];
+                        await set(ref(db, `warehouse/outward/${item.dateKey}/${item.courier}/${item.seller}/${item.awb}`), item);
+                        pendingOutward.shift(); 
+                        saveLocalQueues();
+                        updateUI(); // Live UI Update
+                        continue;
+                    }
+                    if (pendingInward.length > 0) {
+                        let item = pendingInward[0];
+                        await set(ref(db, `warehouse/inward/${item.dateKey}/${item.courier}/${item.seller}/${item.awb}`), item);
+                        pendingInward.shift(); 
+                        saveLocalQueues();
+                        updateUI(); // Live UI Update
+                        continue;
+                    }
+                }
+            } catch(e) {
+                // If internet fails, it exits the loop cleanly keeping data safely in the array
+                console.error("Sync interrupted:", e);
+            } finally {
+                isSyncing = false; // Release the lock
+                
+                // Final Check
+                let finalPending = pendingOutward.length + pendingInward.length + pendingDeletions.length;
+                if (finalPending === 0) {
+                    syncStatusEl.innerText = "☁️ Synced";
+                    syncStatusEl.className = "text-xs bg-green-500 text-white font-bold px-2.5 py-1 rounded-full";
+                }
+                updateUI();
             }
-            while(pendingOutward.length > 0) {
-                let item = pendingOutward[0];
-                try {
-                    await set(ref(db, `warehouse/outward/${item.dateKey}/${item.courier}/${item.seller}/${item.awb}`), item);
-                    pendingOutward.shift(); saveLocalQueues();
-                } catch(e) { break; }
-            }
-            while(pendingInward.length > 0) {
-                let item = pendingInward[0];
-                try {
-                    await set(ref(db, `warehouse/inward/${item.dateKey}/${item.courier}/${item.seller}/${item.awb}`), item);
-                    pendingInward.shift(); saveLocalQueues();
-                } catch(e) { break; }
-            }
-            updateUI();
         }
 
-        setInterval(syncWorker, 3000);
+        // setInterval(syncWorker, 3000); <-- REMOVED (No longer needed)
 
         function detectCourier(awb) {
             const cleanAwb = awb.replace(/(NYK|AJI|LI)$/, '');
@@ -319,8 +340,6 @@
                 if (len === 11) return { name: 'BlueDart', class: 'badge-bluedart' };
                 if (len === 12) return { name: 'ATS', class: 'badge-ats' }; // Amazon standard 12-digit
                 
-                // --- STRONGER AMAZON ATS RULE ---
-                // Agar 14 ya 16 digits lamba ho aur 16, 37, ya 133 se shuru ho
                 if ((len === 14 || len === 16) && (cleanAwb.startsWith('16') || cleanAwb.startsWith('37') || cleanAwb.startsWith('133'))) {
                     return { name: 'ATS', class: 'badge-ats' };
                 }
@@ -348,7 +367,6 @@
             const isMyntraSig = awb.startsWith('MY') && !awb.startsWith('MYSFXHL');
             const isFlipkartSig = awb.startsWith('FM') || awb.startsWith('EKT') || awb.startsWith('SRSC') || awb.startsWith('SRSP') || awb.startsWith('FMPP') || awb.startsWith('FMPC');
             const isValmoSig = awb.startsWith('VL');
-            // --- UPDATED AMAZON SIGNATURE TO ALLOW UPTO 16 DIGITS ---
             const isAmazonSig = /^\d{12,16}$/.test(awb);
 
             if (marketplace === 'Flipkart' && (isMyntraSig || isValmoSig || isAmazonSig)) return false;
@@ -367,7 +385,6 @@
                 let awb = this.value.toUpperCase().split('|')[0].replace(/[^A-Z0-9]/g, "").trim();
                 if (awb === '') return;
                 
-                // INVALID BARCODE PREVENTION
                 if (awb.startsWith('SWLOMS') || awb.startsWith('MPP') || awb.startsWith('EPTS')) {
                     playSound('error');
                     showMessage(`❌ INVALID BARCODE: Scan AWB, not packaging/order ID (${awb}).`, 'text-red-600 bg-red-100 px-3 py-1 rounded');
@@ -381,7 +398,6 @@
                 let colorClass = 'text-green-600 bg-green-100 px-3 py-1 rounded';
 
                 if (currentMode === 'outward') {
-                    // AUTO-SELECT SELLER FIRST
                     if (awb.startsWith('AJI') || awb.endsWith('AJI')) sellerSelect.value = 'Ajio';
                     else if (awb.startsWith('LM') || awb.endsWith('LI')) sellerSelect.value = 'LimeRoad';
                     else if (awb.startsWith('NK') || awb.endsWith('NYK')) sellerSelect.value = 'Nykaa';
@@ -505,6 +521,9 @@
             const inputField = document.getElementById('awb-input');
             inputField.value = '';
             inputField.focus();
+
+            // TRIGGER SYNC INSTANTLY
+            syncWorker();
         }
 
         function renderList() {

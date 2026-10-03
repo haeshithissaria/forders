@@ -234,7 +234,7 @@
 
         onValue(ref(db, '.info/connected'), (snapshot) => {
             if (snapshot.val() === true) {
-                syncStatusEl.innerText = "☁️ Firebase Connected";
+                syncStatusEl.innerText = "☁️️ Firebase Connected";
                 syncStatusEl.className = "text-xs bg-green-500 text-white font-bold px-2.5 py-1 rounded-full";
             } else {
                 syncStatusEl.innerText = "⏳ Offline (Cached)";
@@ -317,10 +317,15 @@
                 if (cleanAwb.startsWith('FM') || cleanAwb.startsWith('EKT') || ['FMPP', 'FMPC', 'SRSC', 'SRSP', 'LMRP'].some(p => cleanAwb.startsWith(p))) return { name: 'Flipkart / E-Kart', class: 'badge-flipkart' };
             } else if (/^\d+$/.test(cleanAwb)) {
                 if (len === 11) return { name: 'BlueDart', class: 'badge-bluedart' };
-                if (len === 12) return { name: 'ATS', class: 'badge-ats' };
-                if (len === 13 || len === 16) return { name: 'Delhivery', class: 'badge-delhivery' };
-                if (len === 15 || len === 14) {
-                    if (len === 14 && (cleanAwb.startsWith('168') || cleanAwb.startsWith('133') || cleanAwb.startsWith('372'))) return { name: 'ATS', class: 'badge-ats' };
+                if (len === 12) return { name: 'ATS', class: 'badge-ats' }; // Amazon standard 12-digit
+                
+                // --- STRONGER AMAZON ATS RULE ---
+                // Agar 14 ya 16 digits lamba ho aur 16, 37, ya 133 se shuru ho
+                if ((len === 14 || len === 16) && (cleanAwb.startsWith('16') || cleanAwb.startsWith('37') || cleanAwb.startsWith('133'))) {
+                    return { name: 'ATS', class: 'badge-ats' };
+                }
+
+                if (len >= 13 && len <= 16) {
                     if (cleanAwb.startsWith('134') || cleanAwb.startsWith('136') || cleanAwb.startsWith('141')) return { name: 'Xpressbees', class: 'badge-xpressbees' };
                     return { name: 'Delhivery', class: 'badge-delhivery' };
                 }
@@ -343,7 +348,8 @@
             const isMyntraSig = awb.startsWith('MY') && !awb.startsWith('MYSFXHL');
             const isFlipkartSig = awb.startsWith('FM') || awb.startsWith('EKT') || awb.startsWith('SRSC') || awb.startsWith('SRSP') || awb.startsWith('FMPP') || awb.startsWith('FMPC');
             const isValmoSig = awb.startsWith('VL');
-            const isAmazonSig = /^\d{12}$\vert{}^\d{14}$/.test(awb);
+            // --- UPDATED AMAZON SIGNATURE TO ALLOW UPTO 16 DIGITS ---
+            const isAmazonSig = /^\d{12,16}$/.test(awb);
 
             if (marketplace === 'Flipkart' && (isMyntraSig || isValmoSig || isAmazonSig)) return false;
             if (marketplace === 'Myntra' && (isFlipkartSig || isValmoSig || isAmazonSig)) return false;
@@ -361,7 +367,7 @@
                 let awb = this.value.toUpperCase().split('|')[0].replace(/[^A-Z0-9]/g, "").trim();
                 if (awb === '') return;
                 
-                // --- INVALID BARCODE PREVENTION (Order IDs, MPP, SWLOMS, EPTS) ---
+                // INVALID BARCODE PREVENTION
                 if (awb.startsWith('SWLOMS') || awb.startsWith('MPP') || awb.startsWith('EPTS')) {
                     playSound('error');
                     showMessage(`❌ INVALID BARCODE: Scan AWB, not packaging/order ID (${awb}).`, 'text-red-600 bg-red-100 px-3 py-1 rounded');
@@ -370,27 +376,12 @@
                     return;
                 }
 
-                const currentSeller = sellerSelect.value;
                 const courierInfo = detectCourier(awb);
-                let finalSeller = currentMode === 'outward' ? currentSeller : "N/A";
                 let customMsg = `✅ Success: ${awb}`;
                 let colorClass = 'text-green-600 bg-green-100 px-3 py-1 rounded';
 
                 if (currentMode === 'outward') {
-                    if (!verifyMarketplaceMatch(awb, currentSeller)) {
-                        playSound('error');
-                        showMessage(`❌ Mismatch! This AWB format does not match the active Marketplace.`, 'text-red-600 bg-red-100 px-3 py-1 rounded');
-                        this.value = ''; this.focus(); return;
-                    }
-
-                    const outwardMerged = getMergedData('outward');
-                    const existingOutward = outwardMerged.find(i => i.awb === awb);
-                    if (existingOutward) {
-                        showMessage(`❌ FAILED: Duplicate! Already scanned in Outward on ${existingOutward.date} at ${existingOutward.time}`, 'text-red-600 bg-red-100 px-3 py-1 rounded');
-                        playSound('duplicate');
-                        this.value = ''; this.focus(); return; 
-                    }
-
+                    // AUTO-SELECT SELLER FIRST
                     if (awb.startsWith('AJI') || awb.endsWith('AJI')) sellerSelect.value = 'Ajio';
                     else if (awb.startsWith('LM') || awb.endsWith('LI')) sellerSelect.value = 'LimeRoad';
                     else if (awb.startsWith('NK') || awb.endsWith('NYK')) sellerSelect.value = 'Nykaa';
@@ -401,12 +392,26 @@
                     else if (courierInfo.name === 'Valmo' || courierInfo.name === 'ElasticRun') sellerSelect.value = 'Meesho';
                     else if (courierInfo.name === 'ATS') sellerSelect.value = 'Amazon';
                     
-                    finalSeller = sellerSelect.value;
+                    const finalSeller = sellerSelect.value;
+
+                    if (!verifyMarketplaceMatch(awb, finalSeller)) {
+                        playSound('error');
+                        showMessage(`❌ Mismatch! This AWB format does not match the active Marketplace.`, 'text-red-600 bg-red-100 px-3 py-1 rounded');
+                        this.value = ''; this.focus(); return;
+                    }
 
                     if (finalSeller === 'Amazon' && courierInfo.name !== 'ATS') {
                         playSound('error');
                         showMessage('❌ Mismatch: Amazon seller can only accept ATS barcodes.', 'text-red-600 bg-red-100 px-3 py-1 rounded');
                         this.value = ''; this.focus(); return;
+                    }
+
+                    const outwardMerged = getMergedData('outward');
+                    const existingOutward = outwardMerged.find(i => i.awb === awb);
+                    if (existingOutward) {
+                        showMessage(`❌ FAILED: Duplicate! Already scanned in Outward on ${existingOutward.date} at ${existingOutward.time}`, 'text-red-600 bg-red-100 px-3 py-1 rounded');
+                        playSound('duplicate');
+                        this.value = ''; this.focus(); return; 
                     }
 
                     const inwardMerged = getMergedData('inward');
@@ -423,6 +428,8 @@
                         customMsg = `🔄 Restored to Outward & Removed from Inward: ${awb}`;
                         colorClass = 'text-blue-700 bg-blue-100 px-3 py-1 rounded';
                     }
+
+                    saveRecord(awb, finalSeller, courierInfo, customMsg, colorClass);
 
                 } else if (currentMode === 'inward') {
                     const outwardMerged = getMergedData('outward');
@@ -442,7 +449,7 @@
                         this.value = ''; this.focus(); return; 
                     }
 
-                    finalSeller = outwardMatch.seller;
+                    const finalSeller = outwardMatch.seller;
                     
                     const pIndex = pendingOutward.findIndex(i => i.awb === awb);
                     if(pIndex > -1) {
@@ -453,47 +460,52 @@
                     }
                     customMsg = `🔄 Recovered & Removed from Outward: ${awb}`;
                     colorClass = 'text-blue-700 bg-blue-100 px-3 py-1 rounded';
+
+                    saveRecord(awb, finalSeller, courierInfo, customMsg, colorClass);
                 }
-
-                const now = new Date();
-                const dateKey = getLocalDateKey(now); 
-                const d = String(now.getDate()).padStart(2, '0');
-                const m = String(now.getMonth() + 1).padStart(2, '0');
-                const y = now.getFullYear();
-                const formattedDate = `${d}-${m}-${y}`;
-
-                const newItem = {
-                    dateKey: dateKey,
-                    date: formattedDate,
-                    time: now.toLocaleTimeString(),
-                    timestamp: now.getTime(),
-                    courier: courierInfo.name,
-                    seller: finalSeller,
-                    awb: awb,
-                    badgeClass: courierInfo.class
-                };
-
-                if (currentMode === 'outward') {
-                    pendingOutward.push(newItem);
-                    sessionCountOutward++;
-                    localStorage.setItem('wh_session_outward', sessionCountOutward);
-                    sessionCountEl.innerText = sessionCountOutward;
-                } else {
-                    pendingInward.push(newItem);
-                    sessionCountInward++;
-                    localStorage.setItem('wh_session_inward', sessionCountInward);
-                    sessionCountEl.innerText = sessionCountInward;
-                }
-                
-                saveLocalQueues();
-                updateUI(); 
-                showMessage(customMsg, colorClass);
-                playSound('success');
-
-                this.value = '';
-                this.focus();
             }
         });
+
+        function saveRecord(awb, finalSeller, courierInfo, customMsg, colorClass) {
+            const now = new Date();
+            const dateKey = getLocalDateKey(now); 
+            const d = String(now.getDate()).padStart(2, '0');
+            const m = String(now.getMonth() + 1).padStart(2, '0');
+            const y = now.getFullYear();
+            const formattedDate = `${d}-${m}-${y}`;
+
+            const newItem = {
+                dateKey: dateKey,
+                date: formattedDate,
+                time: now.toLocaleTimeString(),
+                timestamp: now.getTime(),
+                courier: courierInfo.name,
+                seller: finalSeller,
+                awb: awb,
+                badgeClass: courierInfo.class
+            };
+
+            if (currentMode === 'outward') {
+                pendingOutward.push(newItem);
+                sessionCountOutward++;
+                localStorage.setItem('wh_session_outward', sessionCountOutward);
+                sessionCountEl.innerText = sessionCountOutward;
+            } else {
+                pendingInward.push(newItem);
+                sessionCountInward++;
+                localStorage.setItem('wh_session_inward', sessionCountInward);
+                sessionCountEl.innerText = sessionCountInward;
+            }
+            
+            saveLocalQueues();
+            updateUI(); 
+            showMessage(customMsg, colorClass);
+            playSound('success');
+
+            const inputField = document.getElementById('awb-input');
+            inputField.value = '';
+            inputField.focus();
+        }
 
         function renderList() {
             const listEl = document.getElementById('scan-list');
@@ -613,39 +625,47 @@
             scanMessage.className = `mt-3 text-sm font-bold h-auto ${colorClass} inline-block`;
         }
 
+        let globalAudioCtx = null; 
+
         function playSound(type) {
-            const ctx = new (window.AudioContext || window.webkitAudioContext)();
-            const osc = ctx.createOscillator();
-            const gain = ctx.createGain();
+            if (!globalAudioCtx) {
+                globalAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (globalAudioCtx.state === 'suspended') {
+                globalAudioCtx.resume();
+            }
+
+            const osc = globalAudioCtx.createOscillator();
+            const gain = globalAudioCtx.createGain();
             osc.connect(gain); 
-            gain.connect(ctx.destination);
+            gain.connect(globalAudioCtx.destination);
 
             if (type === 'success') {
                 osc.type = 'sine'; 
-                osc.frequency.setValueAtTime(800, ctx.currentTime);
-                osc.frequency.exponentialRampToValueAtTime(1200, ctx.currentTime + 0.1);
-                gain.gain.setValueAtTime(0.1, ctx.currentTime); 
-                gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.1);
-                osc.start(ctx.currentTime); 
-                osc.stop(ctx.currentTime + 0.2);
+                osc.frequency.setValueAtTime(800, globalAudioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(1200, globalAudioCtx.currentTime + 0.1);
+                gain.gain.setValueAtTime(0.1, globalAudioCtx.currentTime); 
+                gain.gain.exponentialRampToValueAtTime(0.01, globalAudioCtx.currentTime + 0.1);
+                osc.start(globalAudioCtx.currentTime); 
+                osc.stop(globalAudioCtx.currentTime + 0.2);
             } else if (type === 'duplicate') {
                 osc.type = 'square'; 
-                osc.frequency.setValueAtTime(350, ctx.currentTime);
-                osc.frequency.setValueAtTime(250, ctx.currentTime + 0.15);
-                gain.gain.setValueAtTime(0.5, ctx.currentTime); 
-                gain.gain.setValueAtTime(0.01, ctx.currentTime + 0.1);
-                gain.gain.setValueAtTime(0.5, ctx.currentTime + 0.15); 
-                gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.35);
-                osc.start(ctx.currentTime); 
-                osc.stop(ctx.currentTime + 0.35);
+                osc.frequency.setValueAtTime(350, globalAudioCtx.currentTime);
+                osc.frequency.setValueAtTime(250, globalAudioCtx.currentTime + 0.15);
+                gain.gain.setValueAtTime(0.5, globalAudioCtx.currentTime); 
+                gain.gain.setValueAtTime(0.01, globalAudioCtx.currentTime + 0.1);
+                gain.gain.setValueAtTime(0.5, globalAudioCtx.currentTime + 0.15); 
+                gain.gain.exponentialRampToValueAtTime(0.01, globalAudioCtx.currentTime + 0.35);
+                osc.start(globalAudioCtx.currentTime); 
+                osc.stop(globalAudioCtx.currentTime + 0.35);
             } else {
                 osc.type = 'sawtooth'; 
-                osc.frequency.setValueAtTime(260, ctx.currentTime);
-                osc.frequency.setValueAtTime(140, ctx.currentTime + 0.15);
-                gain.gain.setValueAtTime(0.6, ctx.currentTime); 
-                gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
-                osc.start(ctx.currentTime); 
-                osc.stop(ctx.currentTime + 0.3);
+                osc.frequency.setValueAtTime(260, globalAudioCtx.currentTime);
+                osc.frequency.setValueAtTime(140, globalAudioCtx.currentTime + 0.15);
+                gain.gain.setValueAtTime(0.6, globalAudioCtx.currentTime); 
+                gain.gain.exponentialRampToValueAtTime(0.01, globalAudioCtx.currentTime + 0.3);
+                osc.start(globalAudioCtx.currentTime); 
+                osc.stop(globalAudioCtx.currentTime + 0.3);
             }
         }
 

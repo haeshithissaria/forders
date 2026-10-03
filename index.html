@@ -119,8 +119,17 @@
                 <h2 class="text-xl font-bold text-gray-800">Scan History: <span id="current-mode-label" class="theme-text">OUTWARD</span></h2>
                 <span id="active-list-count" class="bg-gray-800 text-white text-xs font-bold px-3 py-1 rounded-full">0 items</span>
             </div>
-            <div class="flex-grow overflow-y-auto p-4 bg-gray-50">
+            
+            <!-- Added flex flex-col to keep the structure clean -->
+            <div class="flex-grow overflow-y-auto p-4 bg-gray-50 flex flex-col">
                 <ul id="scan-list" class="space-y-3"></ul>
+                
+                <!-- NEW: Show More Container -->
+                <div id="show-more-container" class="mt-6 mb-2 text-center hidden">
+                    <button onclick="loadMoreItems()" class="bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-2 px-6 rounded-full shadow-sm transition-colors text-sm">
+                        Show More ⬇️
+                    </button>
+                </div>
             </div>
         </div>
     </main>
@@ -170,7 +179,10 @@
 
         let currentMode = 'outward'; 
         let firebaseData = { outward: [], inward: [] };
-        let isSyncing = false; // NEW SYNC LOCK
+        let isSyncing = false; 
+        
+        // NEW: Display Limit Variable
+        let currentDisplayLimit = 100;
         
         let pendingOutward = JSON.parse(localStorage.getItem('wh_pendingOutward') || '[]');
         let pendingInward = JSON.parse(localStorage.getItem('wh_pendingInward') || '[]');
@@ -237,7 +249,7 @@
             if (snapshot.val() === true) {
                 syncStatusEl.innerText = "☁ Firebase Connected";
                 syncStatusEl.className = "text-xs bg-green-500 text-white font-bold px-2.5 py-1 rounded-full";
-                syncWorker(); // Trigger sync automatically when reconnected
+                syncWorker(); 
             } else {
                 syncStatusEl.innerText = "⏳ Offline (Cached)";
                 syncStatusEl.className = "text-xs bg-yellow-400 text-gray-900 font-bold px-2.5 py-1 rounded-full";
@@ -264,15 +276,14 @@
             updateGlobalCounts();
         }
 
-        // NEW ASYNC EVENT-DRIVEN SYNC WORKER
         async function syncWorker() {
-            if (isSyncing) return; // Prevent multiple sync instances from clashing
+            if (isSyncing) return; 
             isSyncing = true;
 
             try {
                 while(true) {
                     let totalPending = pendingOutward.length + pendingInward.length + pendingDeletions.length;
-                    if (totalPending === 0) break; // End loop if nothing left
+                    if (totalPending === 0) break; 
 
                     syncStatusEl.innerText = `🔄 Auto-Syncing (${totalPending})...`;
                     syncStatusEl.className = "text-xs bg-blue-500 text-white font-bold px-2.5 py-1 rounded-full animate-pulse";
@@ -284,7 +295,7 @@
                         await remove(ref(db, `warehouse/${delPath}/${item.dateKey}/${item.courier}/${item.seller}/${item.awb}`));
                         pendingDeletions.shift(); 
                         saveLocalQueues();
-                        updateUI(); // Live UI Update
+                        updateUI(); 
                         continue;
                     }
                     if (pendingOutward.length > 0) {
@@ -292,7 +303,7 @@
                         await set(ref(db, `warehouse/outward/${item.dateKey}/${item.courier}/${item.seller}/${item.awb}`), item);
                         pendingOutward.shift(); 
                         saveLocalQueues();
-                        updateUI(); // Live UI Update
+                        updateUI(); 
                         continue;
                     }
                     if (pendingInward.length > 0) {
@@ -300,17 +311,14 @@
                         await set(ref(db, `warehouse/inward/${item.dateKey}/${item.courier}/${item.seller}/${item.awb}`), item);
                         pendingInward.shift(); 
                         saveLocalQueues();
-                        updateUI(); // Live UI Update
+                        updateUI(); 
                         continue;
                     }
                 }
             } catch(e) {
-                // If internet fails, it exits the loop cleanly keeping data safely in the array
                 console.error("Sync interrupted:", e);
             } finally {
-                isSyncing = false; // Release the lock
-                
-                // Final Check
+                isSyncing = false; 
                 let finalPending = pendingOutward.length + pendingInward.length + pendingDeletions.length;
                 if (finalPending === 0) {
                     syncStatusEl.innerText = "☁️ Synced";
@@ -319,8 +327,6 @@
                 updateUI();
             }
         }
-
-        // setInterval(syncWorker, 3000); <-- REMOVED (No longer needed)
 
         function detectCourier(awb) {
             const cleanAwb = awb.replace(/(NYK|AJI|LI)$/, '');
@@ -338,7 +344,7 @@
                 if (cleanAwb.startsWith('FM') || cleanAwb.startsWith('EKT') || ['FMPP', 'FMPC', 'SRSC', 'SRSP', 'LMRP'].some(p => cleanAwb.startsWith(p))) return { name: 'Flipkart / E-Kart', class: 'badge-flipkart' };
             } else if (/^\d+$/.test(cleanAwb)) {
                 if (len === 11) return { name: 'BlueDart', class: 'badge-bluedart' };
-                if (len === 12) return { name: 'ATS', class: 'badge-ats' }; // Amazon standard 12-digit
+                if (len === 12) return { name: 'ATS', class: 'badge-ats' }; 
                 
                 if ((len === 14 || len === 16) && (cleanAwb.startsWith('16') || cleanAwb.startsWith('37') || cleanAwb.startsWith('133'))) {
                     return { name: 'ATS', class: 'badge-ats' };
@@ -522,12 +528,18 @@
             inputField.value = '';
             inputField.focus();
 
-            // TRIGGER SYNC INSTANTLY
             syncWorker();
         }
 
+        // NEW: Load More Function
+        window.loadMoreItems = () => {
+            currentDisplayLimit += 100; // Load next 100 records
+            renderList();
+        };
+
         function renderList() {
             const listEl = document.getElementById('scan-list');
+            const showMoreBtn = document.getElementById('show-more-container');
             const dataToRender = getMergedData(currentMode);
             
             document.getElementById('active-list-count').innerText = `${dataToRender.length} items`;
@@ -540,10 +552,14 @@
                         <p class="text-lg font-medium">No scans yet.</p>
                         <p class="text-sm">Start scanning AWB barcodes to populate this list.</p>
                     </div>`;
+                if(showMoreBtn) showMoreBtn.classList.add('hidden');
                 return;
             }
 
-            dataToRender.forEach((item, index) => {
+            // NEW: Slice the array based on the display limit
+            const itemsToShow = dataToRender.slice(0, currentDisplayLimit);
+
+            itemsToShow.forEach((item, index) => {
                 const li = document.createElement('li');
                 li.className = "bg-white p-4 rounded-lg shadow-sm border border-gray-200 flex justify-between items-center mb-3";
                 
@@ -568,6 +584,13 @@
                     </div>`;
                 listEl.appendChild(li);
             });
+
+            // NEW: Show or Hide the Load More Button
+            if (dataToRender.length > currentDisplayLimit) {
+                if (showMoreBtn) showMoreBtn.classList.remove('hidden');
+            } else {
+                if (showMoreBtn) showMoreBtn.classList.add('hidden');
+            }
         }
 
         function renderStats() {
@@ -690,6 +713,8 @@
 
         window.setMode = (mode) => {
             currentMode = mode;
+            currentDisplayLimit = 100; // NEW: Reset limit on mode switch
+            
             document.body.className = `mode-${mode} min-h-screen flex flex-col transition-colors`;
             document.getElementById('btn-outward').className = mode === 'outward' ? "flex-1 py-4 text-center font-bold text-lg border-b-4 border-orange-500 bg-orange-50 text-orange-700" : "flex-1 py-4 text-center font-bold text-lg border-b-4 border-transparent text-gray-500 hover:bg-gray-50";
             document.getElementById('btn-inward').className = mode === 'inward' ? "flex-1 py-4 text-center font-bold text-lg border-b-4 border-blue-500 bg-blue-50 text-blue-700" : "flex-1 py-4 text-center font-bold text-lg border-b-4 border-transparent text-gray-500 hover:bg-gray-50";

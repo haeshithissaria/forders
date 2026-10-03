@@ -365,7 +365,8 @@
             const isMyntraSig = awb.startsWith('MY') && !awb.startsWith('MYSFXHL');
             const isFlipkartSig = awb.startsWith('FM') || awb.startsWith('FMPP') || awb.startsWith('FMPC');
             const isValmoSig = awb.startsWith('VL');
-            const isAmazonSig = /^\d{12}$/.test(awb);
+            const isAmazonSig = /^\d{12}$|^\d{14}$/.test(awb);
+
 
             if (marketplace === 'Flipkart' && (isMyntraSig || isValmoSig || isAmazonSig)) return false;
             if (marketplace === 'Myntra' && (isFlipkartSig || isValmoSig || isAmazonSig)) return false;

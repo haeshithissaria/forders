@@ -361,10 +361,10 @@
                 let awb = this.value.toUpperCase().split('|')[0].replace(/[^A-Z0-9]/g, "").trim();
                 if (awb === '') return;
                 
-                // --- INVALID BARCODE PREVENTION (Order IDs, MPP, SWLOMS) ---
-                if (awb.startsWith('SWLOMS') || awb.startsWith('MPP')) {
+                // --- INVALID BARCODE PREVENTION (Order IDs, MPP, SWLOMS, EPTS) ---
+                if (awb.startsWith('SWLOMS') || awb.startsWith('MPP') || awb.startsWith('EPTS')) {
                     playSound('error');
-                    showMessage(`❌ INVALID BARCODE: Scan AWB, not Order ID (${awb}).`, 'text-red-600 bg-red-100 px-3 py-1 rounded');
+                    showMessage(`❌ INVALID BARCODE: Scan AWB, not packaging/order ID (${awb}).`, 'text-red-600 bg-red-100 px-3 py-1 rounded');
                     this.value = ''; 
                     this.focus(); 
                     return;

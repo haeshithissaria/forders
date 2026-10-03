@@ -210,13 +210,46 @@
             });
         }
 
+        // --- NEW SMART RECURSIVE FLATTENER ---
+        function flattenFirebaseData(snapshotVal) {
+            let items = [];
+            if (!snapshotVal) return items;
+            
+            // Recursive function to hunt for scan records regardless of database folder depth
+            function extractItems(node) {
+                if (!node || typeof node !== 'object') return;
+                
+                // If the node has an 'awb' property, we know it's a valid scan record
+                if (node.awb) {
+                    items.push(node);
+                    return;
+                }
+                
+                // Otherwise, keep digging deeper into the folders
+                Object.values(node).forEach(childNode => {
+                    extractItems(childNode);
+                });
+            }
+            
+            extractItems(snapshotVal);
+            return items;
+        }
+
+        // --- SAFEGUARDED MERGE LOGIC ---
         function getMergedData(mode) {
             const pendingList = mode === 'outward' ? pendingOutward : pendingInward;
             const fbList = firebaseData[mode] || [];
             
             const map = new Map();
-            fbList.forEach(item => map.set(item.awb, { ...item, synced: true }));
-            pendingList.forEach(item => map.set(item.awb, { ...item, synced: false }));
+            
+            // Added safeguard: only process valid items that actually have an AWB
+            fbList.forEach(item => {
+                if (item && item.awb) map.set(item.awb, { ...item, synced: true });
+            });
+            
+            pendingList.forEach(item => {
+                if (item && item.awb) map.set(item.awb, { ...item, synced: false });
+            });
             
             return Array.from(map.values()).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
         }
@@ -225,20 +258,6 @@
             localStorage.setItem('wh_pendingOutward', JSON.stringify(pendingOutward));
             localStorage.setItem('wh_pendingInward', JSON.stringify(pendingInward));
             localStorage.setItem('wh_pendingDeletions', JSON.stringify(pendingDeletions));
-        }
-
-        function flattenFirebaseData(snapshotVal) {
-            let items = [];
-            if (!snapshotVal) return items;
-            Object.keys(snapshotVal).forEach(dateKey => {
-                const couriers = snapshotVal[dateKey];
-                if (couriers) Object.keys(couriers).forEach(c => {
-                    if(couriers[c]) Object.keys(couriers[c]).forEach(s => {
-                        if(couriers[c][s]) Object.keys(couriers[c][s]).forEach(a => items.push(couriers[c][s][a]));
-                    });
-                });
-            });
-            return items;
         }
 
         // Firebase Listeners
@@ -336,7 +355,8 @@
                 if (cleanAwb.startsWith('CLQ')) return { name: 'E-Kart (TataCliq)', class: 'badge-flipkart' };
                 if (cleanAwb.startsWith('NK')) return { name: 'E-Kart (Nykaa)', class: 'badge-flipkart' };
                 if (cleanAwb.startsWith('LM')) return { name: 'E-Kart (LimeRoad)', class: 'badge-flipkart' }; 
-                if (cleanAwb.startsWith('FM') || ['FMPP', 'FMPC', 'SRSC', 'SRSP', 'LMRP'].some(p => cleanAwb.startsWith(p))) return { name: 'Flipkart / E-Kart', class: 'badge-flipkart' };
+                // --- UPDATED EKART LOGIC ---
+                if (cleanAwb.startsWith('FM') || cleanAwb.startsWith('EKT') || ['FMPP', 'FMPC', 'SRSC', 'SRSP', 'LMRP'].some(p => cleanAwb.startsWith(p))) return { name: 'Flipkart / E-Kart', class: 'badge-flipkart' };
             } else if (/^\d+$/.test(cleanAwb)) {
                 if (len === 11) return { name: 'BlueDart', class: 'badge-bluedart' };
                 if (len === 12) return { name: 'ATS', class: 'badge-ats' };
@@ -363,7 +383,8 @@
             if (courierName === 'ATS' && marketplace !== 'Amazon') return false;
 
             const isMyntraSig = awb.startsWith('MY') && !awb.startsWith('MYSFXHL');
-            const isFlipkartSig = awb.startsWith('FM') || awb.startsWith('FMPP') || awb.startsWith('FMPC');
+            // --- UPDATED FLIPKART SIGNATURE ---
+            const isFlipkartSig = awb.startsWith('FM') || awb.startsWith('EKT') || awb.startsWith('SRSC') || awb.startsWith('SRSP') || awb.startsWith('FMPP') || awb.startsWith('FMPC');
             const isValmoSig = awb.startsWith('VL');
             const isAmazonSig = /^\d{12}$|^\d{14}$/.test(awb);
 
@@ -488,7 +509,7 @@
 
                 const newItem = {
                     dateKey: dateKey,
-                    date: formattedDate, // <--- UPDATE APPLIED HERE
+                    date: formattedDate,
                     time: now.toLocaleTimeString(),
                     timestamp: now.getTime(),
                     courier: courierInfo.name,
@@ -565,6 +586,7 @@
             });
         }
 
+        // --- UPDATED STATIC STATS RENDERER ---
         function renderStats() {
             const statsEl = document.getElementById('courier-stats');
             const todayKey = getLocalDateKey();
@@ -575,14 +597,32 @@
                 return;
             }
 
-            let counts = {};
+            // Pre-fill essential couriers so they ALWAYS appear on the dashboard, even at 0
+            let counts = {
+                'Flipkart / E-Kart': { count: 0, badge: 'badge-flipkart' },
+                'Myntra Logistics': { count: 0, badge: 'badge-myntra' },
+                'Delhivery': { count: 0, badge: 'badge-delhivery' },
+                'Xpressbees': { count: 0, badge: 'badge-xpressbees' },
+                'Shadowfax': { count: 0, badge: 'badge-shadowfax' },
+                'BlueDart': { count: 0, badge: 'badge-bluedart' },
+                'ATS': { count: 0, badge: 'badge-ats' }
+            };
+
+            // Tally up today's scans
             todaysItems.forEach(i => {
                 if(!counts[i.courier]) counts[i.courier] = { count: 0, badge: i.badgeClass };
                 counts[i.courier].count++;
             });
 
             statsEl.innerHTML = '';
+            
             for (const [courier, info] of Object.entries(counts)) {
+                // Optional: Hide obscure couriers (like Buffer) if they have 0 scans, 
+                // but always render the main ones defined above.
+                if (info.count === 0 && !['Flipkart / E-Kart', 'Myntra Logistics', 'Delhivery', 'Xpressbees', 'Shadowfax', 'BlueDart', 'ATS'].includes(courier)) {
+                    continue; 
+                }
+
                 statsEl.innerHTML += `
                     <div class="flex justify-between border-b border-gray-100 pb-2 text-sm py-1">
                         <div class="flex items-center space-x-2">
@@ -613,7 +653,6 @@
             gain.connect(ctx.destination);
 
             if (type === 'success') {
-                // Pleasant ping for successful scan
                 osc.type = 'sine'; 
                 osc.frequency.setValueAtTime(800, ctx.currentTime);
                 osc.frequency.exponentialRampToValueAtTime(1200, ctx.currentTime + 0.1);
@@ -622,18 +661,16 @@
                 osc.start(ctx.currentTime); 
                 osc.stop(ctx.currentTime + 0.2);
             } else if (type === 'duplicate') {
-                // Distinct double-beep (uh-oh) using a square wave for duplicates
                 osc.type = 'square'; 
                 osc.frequency.setValueAtTime(350, ctx.currentTime);
                 osc.frequency.setValueAtTime(250, ctx.currentTime + 0.15);
                 gain.gain.setValueAtTime(0.5, ctx.currentTime); 
-                gain.gain.setValueAtTime(0.01, ctx.currentTime + 0.1); // Brief pause to create 2 distinct beeps
+                gain.gain.setValueAtTime(0.01, ctx.currentTime + 0.1);
                 gain.gain.setValueAtTime(0.5, ctx.currentTime + 0.15); 
                 gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.35);
                 osc.start(ctx.currentTime); 
                 osc.stop(ctx.currentTime + 0.35);
             } else {
-                // Single loud harsh buzz for standard errors (mismatch/missing)
                 osc.type = 'sawtooth'; 
                 osc.frequency.setValueAtTime(260, ctx.currentTime);
                 osc.frequency.setValueAtTime(140, ctx.currentTime + 0.15);
@@ -728,7 +765,6 @@
 
             if (sDate && eDate) {
                 const start = new Date(sDate); const end = new Date(eDate); end.setHours(23, 59, 59);
-                // UPDATE: Parsing with item.dateKey instead of item.date so JS reads it correctly
                 filtered = filtered.filter(i => { let idt = new Date(i.dateKey); return idt >= start && idt <= end; });
             }
 

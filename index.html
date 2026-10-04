@@ -40,7 +40,7 @@
             <div class="flex items-center space-x-3">
                 <button onclick="switchView('scanner')" id="nav-scanner-btn" class="bg-white text-gray-800 text-sm font-bold px-4 py-2 rounded-lg shadow-sm transition-all">📦 Scanner</button>
                 <button onclick="switchView('reports')" id="nav-reports-btn" class="bg-white/25 hover:bg-white/30 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-all">📊 Reports & Search</button>
-                <span id="sync-status" class="text-xs bg-yellow-400 text-gray-900 font-bold px-2.5 py-1 rounded-full">⚡ Ready</span>
+                <span id="sync-status" class="text-xs bg-green-500 text-white font-bold px-2.5 py-1 rounded-full">☁️ Connected</span>
                 <div class="hidden md:flex space-x-3 text-sm font-medium">
                     <span class="bg-white/20 px-3 py-1 rounded-full">Today Outward: <span id="outward-count">0</span></span>
                     <span class="bg-white/20 px-3 py-1 rounded-full">Today Inward: <span id="inward-count">0</span></span>
@@ -97,7 +97,7 @@
                 <label class="block text-sm font-semibold text-gray-700 mb-2">Scan or Type AWB Number</label>
                 <input type="text" id="awb-input" autocomplete="off" placeholder="Ready to scan..." 
                     oninput="this.value = this.value.replace(/[^a-zA-Z0-9|]/g, '')"
-                    class="w-full text-2xl p-4 border-2 theme-border rounded-lg focus:outline-none focus:ring-4 transition-all uppercase font-mono shadow-inner">
+                    class="w-full text-2xl p-4 border-2 theme-border rounded-lg focus:outline-none focus:ring-4 transition-all uppercase font-mono shadow-inner disabled:bg-gray-200 disabled:cursor-not-allowed">
                 
                 <!-- SCAN MESSAGE AREA -->
                 <p id="scan-message" class="mt-3 text-sm font-medium h-5"></p>
@@ -135,6 +135,7 @@
 
     <!-- VIEW 2: REPORTS -->
     <main id="view-reports" class="flex-grow max-w-7xl mx-auto px-4 py-8 w-full hidden space-y-6">
+        <!-- Reports View Content same as before -->
         <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
             <h2 class="text-2xl font-bold text-gray-800 mb-6 border-b pb-4">📊 Reports Dashboard</h2>
             <div class="mb-8 bg-gray-50 p-6 rounded-xl border border-gray-200">
@@ -145,7 +146,7 @@
                 </div>
             </div>
             <div class="bg-gray-50 p-6 rounded-xl border border-gray-200">
-                <h3 class="text-lg font-bold text-gray-700 mb-3">📅 Date Range Reports (Default: Last 15 Days)</h3>
+                <h3 class="text-lg font-bold text-gray-700 mb-3">📅 Date Range Reports</h3>
                 <div class="grid grid-cols-2 gap-4 mb-4">
                     <input type="date" id="filter-start-date" class="w-full p-3 border border-gray-300 rounded-lg">
                     <input type="date" id="filter-end-date" class="w-full p-3 border border-gray-300 rounded-lg">
@@ -178,13 +179,10 @@
 
         let currentMode = 'outward'; 
         let firebaseData = { outward: [], inward: [] };
-        let isSyncing = false; 
-        
         let currentDisplayLimit = 100;
         
-        let pendingOutward = JSON.parse(localStorage.getItem('wh_pendingOutward') || '[]');
-        let pendingInward = JSON.parse(localStorage.getItem('wh_pendingInward') || '[]');
-        let pendingDeletions = JSON.parse(localStorage.getItem('wh_pendingDeletions') || '[]');
+        // Native Firebase Queue Tracker
+        let pendingFirebaseWrites = new Set();
         
         let sessionCountOutward = parseInt(localStorage.getItem('wh_session_outward') || '0');
         let sessionCountInward = parseInt(localStorage.getItem('wh_session_inward') || '0');
@@ -207,11 +205,9 @@
             const cutoffDate = new Date();
             cutoffDate.setDate(cutoffDate.getDate() - 15);
             const cutoffDateStr = getLocalDateKey(cutoffDate); 
-
             Object.keys(snapshotVal).forEach(dateKey => {
                 if (dateKey < cutoffDateStr) {
-                    remove(ref(db, `warehouse/${mode}/${dateKey}`))
-                        .catch(e => console.error(e));
+                    remove(ref(db, `warehouse/${mode}/${dateKey}`)).catch(e => console.error(e));
                 }
             });
         }
@@ -229,57 +225,42 @@
         }
 
         function getMergedData(mode) {
-            const pendingList = mode === 'outward' ? pendingOutward : pendingInward;
             const fbList = firebaseData[mode] || [];
-            const map = new Map();
-            fbList.forEach(item => { if (item && item.awb) map.set(item.awb, { ...item, synced: true }); });
-            pendingList.forEach(item => { if (item && item.awb) map.set(item.awb, { ...item, synced: false }); });
-            return Array.from(map.values()).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-        }
-
-        function saveLocalQueues() {
-            localStorage.setItem('wh_pendingOutward', JSON.stringify(pendingOutward));
-            localStorage.setItem('wh_pendingInward', JSON.stringify(pendingInward));
-            localStorage.setItem('wh_pendingDeletions', JSON.stringify(pendingDeletions));
+            return fbList.slice().sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
         }
 
         // ==========================================
-        // NEW OFFLINE BLOCKING LOGIC (ADDED HERE)
+        // CONNECTION & QUEUE UI HANDLER
         // ==========================================
-        onValue(ref(db, '.info/connected'), (snapshot) => {
-            const inputField = document.getElementById('awb-input');
-            
-            if (snapshot.val() === true) {
-                // इंटरनेट आ गया
-                syncStatusEl.innerText = "☁ Firebase Connected";
-                syncStatusEl.className = "text-xs bg-green-500 text-white font-bold px-2.5 py-1 rounded-full";
-                
-                if (inputField) {
-                    inputField.disabled = false;
-                    inputField.placeholder = "Ready to scan...";
-                    inputField.classList.remove('bg-gray-200', 'cursor-not-allowed'); // वापस नार्मल कलर
-                    inputField.focus();
-                }
-                
-                scanMessage.innerText = ""; // एरर मैसेज हटा दें
-                syncWorker(); 
+        function updateSyncStatusUI() {
+            if (pendingFirebaseWrites.size > 0) {
+                syncStatusEl.innerText = `⏳ Syncing ${pendingFirebaseWrites.size} items...`;
+                syncStatusEl.className = "text-xs bg-amber-500 text-white font-bold px-2.5 py-1 rounded-full animate-pulse";
             } else {
-                // इंटरनेट चला गया
+                syncStatusEl.innerText = "☁️ All Synced";
+                syncStatusEl.className = "text-xs bg-green-500 text-white font-bold px-2.5 py-1 rounded-full";
+            }
+            renderList(); // Refresh list to show accurate pending/synced badges
+        }
+
+        onValue(ref(db, '.info/connected'), (snapshot) => {
+            if (snapshot.val() === true) {
+                updateSyncStatusUI();
+                awbInput.disabled = false;
+                awbInput.placeholder = "Ready to scan...";
+                awbInput.focus();
+                scanMessage.innerText = ""; 
+            } else {
                 syncStatusEl.innerText = "⛔ Offline (Blocked)";
                 syncStatusEl.className = "text-xs bg-red-600 text-white font-bold px-2.5 py-1 rounded-full animate-pulse";
-                
-                if (inputField) {
-                    inputField.disabled = true; // स्कैनिंग लॉक
-                    inputField.placeholder = "NO INTERNET - Scanning Paused";
-                    inputField.classList.add('bg-gray-200', 'cursor-not-allowed'); // ग्रे कर दें ताकि पता चले लॉक है
-                    inputField.value = ""; // अगर कुछ टाइप था तो क्लियर कर दें
-                }
-                
-                showMessage("❌ No Internet! Scanning is disabled to prevent duplicates.", "text-white bg-red-600 px-3 py-1 rounded");
-                playSound('error'); // लाल रंग का एरर और साउंड भी आएगा
+                // Only block input if completely offline to prevent lost cache on tab close
+                awbInput.disabled = true; 
+                awbInput.placeholder = "NO INTERNET - Scanning Paused";
+                awbInput.value = ""; 
+                showMessage("❌ No Internet! Scanning is disabled.", "text-white bg-red-600 px-3 py-1 rounded");
+                playSound('error'); 
             }
         });
-        // ==========================================
 
         onValue(ref(db, 'warehouse/outward'), (snapshot) => {
             const val = snapshot.val();
@@ -301,62 +282,9 @@
             updateGlobalCounts();
         }
 
-        async function syncWorker() {
-            if (isSyncing) return; 
-            isSyncing = true;
-
-            try {
-                while(true) {
-                    let totalPending = pendingOutward.length + pendingInward.length + pendingDeletions.length;
-                    if (totalPending === 0) break; 
-
-                    syncStatusEl.innerText = `🔄 Auto-Syncing (${totalPending})...`;
-                    syncStatusEl.className = "text-xs bg-blue-500 text-white font-bold px-2.5 py-1 rounded-full animate-pulse";
-
-                    if (pendingDeletions.length > 0) {
-                        let item = pendingDeletions[0];
-                        let delPath = item.deleteFrom === 'inward' ? 'inward' : 'outward';
-                        if (!item.deleteFrom) { delPath = 'outward'; }
-                        await remove(ref(db, `warehouse/${delPath}/${item.dateKey}/${item.courier}/${item.seller}/${item.awb}`));
-                        pendingDeletions.shift(); 
-                        saveLocalQueues();
-                        updateUI(); 
-                        continue;
-                    }
-                    if (pendingOutward.length > 0) {
-                        let item = pendingOutward[0];
-                        await set(ref(db, `warehouse/outward/${item.dateKey}/${item.courier}/${item.seller}/${item.awb}`), item);
-                        pendingOutward.shift(); 
-                        saveLocalQueues();
-                        updateUI(); 
-                        continue;
-                    }
-                    if (pendingInward.length > 0) {
-                        let item = pendingInward[0];
-                        await set(ref(db, `warehouse/inward/${item.dateKey}/${item.courier}/${item.seller}/${item.awb}`), item);
-                        pendingInward.shift(); 
-                        saveLocalQueues();
-                        updateUI(); 
-                        continue;
-                    }
-                }
-            } catch(e) {
-                console.error("Sync interrupted:", e);
-            } finally {
-                isSyncing = false; 
-                let finalPending = pendingOutward.length + pendingInward.length + pendingDeletions.length;
-                if (finalPending === 0) {
-                    syncStatusEl.innerText = "☁️ Synced";
-                    syncStatusEl.className = "text-xs bg-green-500 text-white font-bold px-2.5 py-1 rounded-full";
-                }
-                updateUI();
-            }
-        }
-
         function detectCourier(awb) {
             const cleanAwb = awb.replace(/(NYK|AJI|LI)$/, '');
             const len = cleanAwb.length;
-            
             if (/[A-Z]/.test(cleanAwb)) {
                 if (cleanAwb.startsWith('SF') || cleanAwb.startsWith('MYSFXHL')) return { name: 'Shadowfax', class: 'badge-shadowfax' };
                 if (cleanAwb.startsWith('VL')) return { name: 'Valmo', class: 'badge-valmo' };
@@ -370,11 +298,7 @@
             } else if (/^\d+$/.test(cleanAwb)) {
                 if (len === 11) return { name: 'BlueDart', class: 'badge-bluedart' };
                 if (len === 12) return { name: 'ATS', class: 'badge-ats' }; 
-                
-                if ((len === 14 || len === 16) && (cleanAwb.startsWith('16') || cleanAwb.startsWith('37') || cleanAwb.startsWith('133'))) {
-                    return { name: 'ATS', class: 'badge-ats' };
-                }
-
+                if ((len === 14 || len === 16) && (cleanAwb.startsWith('16') || cleanAwb.startsWith('37') || cleanAwb.startsWith('133'))) return { name: 'ATS', class: 'badge-ats' };
                 if (len >= 13 && len <= 16) {
                     if (cleanAwb.startsWith('134') || cleanAwb.startsWith('136') || cleanAwb.startsWith('141')) return { name: 'Xpressbees', class: 'badge-xpressbees' };
                     return { name: 'Delhivery', class: 'badge-delhivery' };
@@ -386,7 +310,6 @@
         function verifyMarketplaceMatch(awb, marketplace) {
             const courierObj = detectCourier(awb);
             const courierName = courierObj.name;
-
             if (courierName === 'BlueDart' && ['Meesho', 'Flipkart', 'Myntra', 'Amazon'].includes(marketplace)) return false;
             if (courierName === 'Valmo' && marketplace !== 'Meesho') return false;
             if (courierName === 'Delhivery' && ['Flipkart', 'Myntra', 'Amazon'].includes(marketplace)) return false;
@@ -404,7 +327,6 @@
             if (marketplace === 'Myntra' && (isFlipkartSig || isValmoSig || isAmazonSig)) return false;
             if (marketplace === 'Meesho' && (isFlipkartSig || isMyntraSig || isAmazonSig)) return false;
             if (marketplace === 'Amazon' && !isAmazonSig) return false;
-
             return true;
         }
 
@@ -419,9 +341,7 @@
                 if (awb.startsWith('SWLOMS') || awb.startsWith('MPP') || awb.startsWith('EPTS')) {
                     playSound('error');
                     showMessage(`❌ INVALID BARCODE: Scan AWB, not packaging/order ID (${awb}).`, 'text-red-600 bg-red-100 px-3 py-1 rounded');
-                    this.value = ''; 
-                    this.focus(); 
-                    return;
+                    this.value = ''; this.focus(); return;
                 }
 
                 const courierInfo = detectCourier(awb);
@@ -453,6 +373,7 @@
                         this.value = ''; this.focus(); return;
                     }
 
+                    // Firebase Latency Compensation makes this check instant, even if offline/queued
                     const outwardMerged = getMergedData('outward');
                     const existingOutward = outwardMerged.find(i => i.awb === awb);
                     if (existingOutward) {
@@ -465,18 +386,17 @@
                     const inwardMatch = inwardMerged.find(item => item.awb === awb);
                     
                     if (inwardMatch) {
-                        const pIndex = pendingInward.findIndex(i => i.awb === awb);
-                        if(pIndex > -1) {
-                            pendingInward.splice(pIndex, 1);
-                        } else {
-                            inwardMatch.deleteFrom = 'inward';
-                            pendingDeletions.push(inwardMatch);
-                        }
+                        // Background Remove
+                        pendingFirebaseWrites.add(`del_in_${awb}`);
+                        updateSyncStatusUI();
+                        remove(ref(db, `warehouse/inward/${inwardMatch.dateKey}/${inwardMatch.courier}/${inwardMatch.seller}/${inwardMatch.awb}`))
+                            .then(() => { pendingFirebaseWrites.delete(`del_in_${awb}`); updateSyncStatusUI(); });
+                        
                         customMsg = `🔄 Restored to Outward & Removed from Inward: ${awb}`;
                         colorClass = 'text-blue-700 bg-blue-100 px-3 py-1 rounded';
                     }
 
-                    saveRecord(awb, finalSeller, courierInfo, customMsg, colorClass);
+                    saveRecordNativeQueue(awb, finalSeller, courierInfo, customMsg, colorClass);
 
                 } else if (currentMode === 'inward') {
                     const outwardMerged = getMergedData('outward');
@@ -498,22 +418,24 @@
 
                     const finalSeller = outwardMatch.seller;
                     
-                    const pIndex = pendingOutward.findIndex(i => i.awb === awb);
-                    if(pIndex > -1) {
-                        pendingOutward.splice(pIndex, 1);
-                    } else {
-                        outwardMatch.deleteFrom = 'outward';
-                        pendingDeletions.push(outwardMatch);
-                    }
+                    // Background Remove
+                    pendingFirebaseWrites.add(`del_out_${awb}`);
+                    updateSyncStatusUI();
+                    remove(ref(db, `warehouse/outward/${outwardMatch.dateKey}/${outwardMatch.courier}/${outwardMatch.seller}/${outwardMatch.awb}`))
+                        .then(() => { pendingFirebaseWrites.delete(`del_out_${awb}`); updateSyncStatusUI(); });
+
                     customMsg = `🔄 Recovered & Removed from Outward: ${awb}`;
                     colorClass = 'text-blue-700 bg-blue-100 px-3 py-1 rounded';
 
-                    saveRecord(awb, finalSeller, courierInfo, customMsg, colorClass);
+                    saveRecordNativeQueue(awb, finalSeller, courierInfo, customMsg, colorClass);
                 }
             }
         });
 
-        function saveRecord(awb, finalSeller, courierInfo, customMsg, colorClass) {
+        // ==========================================
+        // FIREBASE NATIVE QUEUE SAVE
+        // ==========================================
+        function saveRecordNativeQueue(awb, finalSeller, courierInfo, customMsg, colorClass) {
             const now = new Date();
             const dateKey = getLocalDateKey(now); 
             const d = String(now.getDate()).padStart(2, '0');
@@ -532,28 +454,44 @@
                 badgeClass: courierInfo.class
             };
 
+            // 1. Update UI Counters
             if (currentMode === 'outward') {
-                pendingOutward.push(newItem);
                 sessionCountOutward++;
                 localStorage.setItem('wh_session_outward', sessionCountOutward);
                 sessionCountEl.innerText = sessionCountOutward;
             } else {
-                pendingInward.push(newItem);
                 sessionCountInward++;
                 localStorage.setItem('wh_session_inward', sessionCountInward);
                 sessionCountEl.innerText = sessionCountInward;
             }
             
-            saveLocalQueues();
-            updateUI(); 
+            // 2. Play Sound and Show Message immediately
             showMessage(customMsg, colorClass);
             playSound('success');
 
+            // 3. Clear Input INSTANTLY for fast continuous scanning
             const inputField = document.getElementById('awb-input');
             inputField.value = '';
             inputField.focus();
 
-            syncWorker();
+            // 4. Add to Firebase Native Background Queue
+            pendingFirebaseWrites.add(awb);
+            updateSyncStatusUI(); // Change top badge to Syncing
+
+            const path = `warehouse/${currentMode}/${dateKey}/${courierInfo.name}/${finalSeller}/${awb}`;
+            
+            // Note: NO 'await' here. Firebase handles this in the background queue.
+            set(ref(db, path))
+                .then(() => {
+                    // When server confirms, remove from pending tracking
+                    pendingFirebaseWrites.delete(awb);
+                    updateSyncStatusUI();
+                })
+                .catch(error => {
+                    console.error("Firebase sync error for AWB:", awb, error);
+                    pendingFirebaseWrites.delete(awb);
+                    updateSyncStatusUI();
+                });
         }
 
         window.loadMoreItems = () => {
@@ -586,9 +524,11 @@
                 const li = document.createElement('li');
                 li.className = "bg-white p-4 rounded-lg shadow-sm border border-gray-200 flex justify-between items-center mb-3";
                 
-                const syncBadge = item.synced 
-                    ? `<span class="text-[10px] bg-green-100 text-green-700 font-bold px-2 py-0.5 rounded-full ml-2">☁️ Synced</span>`
-                    : `<span class="text-[10px] bg-amber-100 text-amber-700 font-bold px-2 py-0.5 rounded-full ml-2 animate-pulse">⏳ Pending</span>`;
+                // Real-time Badge logic based on Firebase Promise resolution
+                const isPending = pendingFirebaseWrites.has(item.awb);
+                const syncBadge = isPending 
+                    ? `<span class="text-[10px] bg-amber-100 text-amber-700 font-bold px-2 py-0.5 rounded-full ml-2 animate-pulse">⏳ Syncing</span>`
+                    : `<span class="text-[10px] bg-green-100 text-green-700 font-bold px-2 py-0.5 rounded-full ml-2">☁️ Synced</span>`;
 
                 li.innerHTML = `
                     <div class="flex items-center space-x-4">
@@ -650,7 +590,6 @@
                 if (info.count === 0 && !['Flipkart / E-Kart', 'Myntra Logistics', 'Delhivery', 'Xpressbees', 'Shadowfax', 'BlueDart', 'ATS'].includes(courier)) {
                     continue; 
                 }
-
                 statsEl.innerHTML += `
                     <div class="flex justify-between border-b border-gray-100 pb-2 text-sm py-1">
                         <div class="flex items-center space-x-2">
@@ -690,115 +629,75 @@
         }
 
         let globalAudioCtx = null; 
-
         function playSound(type) {
-            if (!globalAudioCtx) {
-                globalAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            }
-            if (globalAudioCtx.state === 'suspended') {
-                globalAudioCtx.resume();
-            }
+            if (!globalAudioCtx) globalAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            if (globalAudioCtx.state === 'suspended') globalAudioCtx.resume();
 
             const osc = globalAudioCtx.createOscillator();
             const gain = globalAudioCtx.createGain();
-            osc.connect(gain); 
-            gain.connect(globalAudioCtx.destination);
+            osc.connect(gain); gain.connect(globalAudioCtx.destination);
 
             if (type === 'success') {
-                osc.type = 'sine'; 
-                osc.frequency.setValueAtTime(800, globalAudioCtx.currentTime);
-                osc.frequency.exponentialRampToValueAtTime(1200, globalAudioCtx.currentTime + 0.1);
-                gain.gain.setValueAtTime(0.1, globalAudioCtx.currentTime); 
-                gain.gain.exponentialRampToValueAtTime(0.01, globalAudioCtx.currentTime + 0.1);
-                osc.start(globalAudioCtx.currentTime); 
-                osc.stop(globalAudioCtx.currentTime + 0.2);
+                osc.type = 'sine'; osc.frequency.setValueAtTime(800, globalAudioCtx.currentTime); osc.frequency.exponentialRampToValueAtTime(1200, globalAudioCtx.currentTime + 0.1);
+                gain.gain.setValueAtTime(0.1, globalAudioCtx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, globalAudioCtx.currentTime + 0.1);
+                osc.start(globalAudioCtx.currentTime); osc.stop(globalAudioCtx.currentTime + 0.2);
             } else if (type === 'duplicate') {
-                osc.type = 'square'; 
-                osc.frequency.setValueAtTime(350, globalAudioCtx.currentTime);
-                osc.frequency.setValueAtTime(250, globalAudioCtx.currentTime + 0.15);
-                gain.gain.setValueAtTime(0.5, globalAudioCtx.currentTime); 
-                gain.gain.setValueAtTime(0.01, globalAudioCtx.currentTime + 0.1);
-                gain.gain.setValueAtTime(0.5, globalAudioCtx.currentTime + 0.15); 
-                gain.gain.exponentialRampToValueAtTime(0.01, globalAudioCtx.currentTime + 0.35);
-                osc.start(globalAudioCtx.currentTime); 
-                osc.stop(globalAudioCtx.currentTime + 0.35);
+                osc.type = 'square'; osc.frequency.setValueAtTime(350, globalAudioCtx.currentTime); osc.frequency.setValueAtTime(250, globalAudioCtx.currentTime + 0.15);
+                gain.gain.setValueAtTime(0.5, globalAudioCtx.currentTime); gain.gain.setValueAtTime(0.01, globalAudioCtx.currentTime + 0.1); gain.gain.setValueAtTime(0.5, globalAudioCtx.currentTime + 0.15); gain.gain.exponentialRampToValueAtTime(0.01, globalAudioCtx.currentTime + 0.35);
+                osc.start(globalAudioCtx.currentTime); osc.stop(globalAudioCtx.currentTime + 0.35);
             } else {
-                osc.type = 'sawtooth'; 
-                osc.frequency.setValueAtTime(260, globalAudioCtx.currentTime);
-                osc.frequency.setValueAtTime(140, globalAudioCtx.currentTime + 0.15);
-                gain.gain.setValueAtTime(0.6, globalAudioCtx.currentTime); 
-                gain.gain.exponentialRampToValueAtTime(0.01, globalAudioCtx.currentTime + 0.3);
-                osc.start(globalAudioCtx.currentTime); 
-                osc.stop(globalAudioCtx.currentTime + 0.3);
+                osc.type = 'sawtooth'; osc.frequency.setValueAtTime(260, globalAudioCtx.currentTime); osc.frequency.setValueAtTime(140, globalAudioCtx.currentTime + 0.15);
+                gain.gain.setValueAtTime(0.6, globalAudioCtx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, globalAudioCtx.currentTime + 0.3);
+                osc.start(globalAudioCtx.currentTime); osc.stop(globalAudioCtx.currentTime + 0.3);
             }
         }
 
         window.setMode = (mode) => {
-            currentMode = mode;
-            currentDisplayLimit = 100; 
-            
+            currentMode = mode; currentDisplayLimit = 100; 
             document.body.className = `mode-${mode} min-h-screen flex flex-col transition-colors`;
             document.getElementById('btn-outward').className = mode === 'outward' ? "flex-1 py-4 text-center font-bold text-lg border-b-4 border-orange-500 bg-orange-50 text-orange-700" : "flex-1 py-4 text-center font-bold text-lg border-b-4 border-transparent text-gray-500 hover:bg-gray-50";
             document.getElementById('btn-inward').className = mode === 'inward' ? "flex-1 py-4 text-center font-bold text-lg border-b-4 border-blue-500 bg-blue-50 text-blue-700" : "flex-1 py-4 text-center font-bold text-lg border-b-4 border-transparent text-gray-500 hover:bg-gray-50";
             document.getElementById('current-mode-label').innerText = mode.toUpperCase();
             document.getElementById('seller-container').style.display = mode === 'outward' ? 'block' : 'none';
             sessionCountEl.innerText = mode === 'outward' ? sessionCountOutward : sessionCountInward;
-            updateUI(); 
-            awbInput.focus();
+            updateUI(); awbInput.focus();
         };
 
         window.switchView = (v) => {
-            document.getElementById('view-scanner').classList.toggle('hidden', v !== 'scanner');
-            document.getElementById('view-reports').classList.toggle('hidden', v !== 'reports');
-            const navScannerBtn = document.getElementById('nav-scanner-btn');
-            const navReportsBtn = document.getElementById('nav-reports-btn');
+            document.getElementById('view-scanner').classList.toggle('hidden', v !== 'scanner'); document.getElementById('view-reports').classList.toggle('hidden', v !== 'reports');
             if (v === 'scanner') {
-                navScannerBtn.className = "bg-white text-gray-800 text-sm font-bold px-4 py-2 rounded-lg shadow-sm transition-all";
-                navReportsBtn.className = "bg-white/25 hover:bg-white/30 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-all";
-                awbInput.focus();
+                document.getElementById('nav-scanner-btn').className = "bg-white text-gray-800 text-sm font-bold px-4 py-2 rounded-lg shadow-sm transition-all";
+                document.getElementById('nav-reports-btn').className = "bg-white/25 hover:bg-white/30 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-all"; awbInput.focus();
             } else {
-                navReportsBtn.className = "bg-white text-gray-800 text-sm font-bold px-4 py-2 rounded-lg shadow-sm transition-all";
-                navScannerBtn.className = "bg-white/25 hover:bg-white/30 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-all";
+                document.getElementById('nav-reports-btn').className = "bg-white text-gray-800 text-sm font-bold px-4 py-2 rounded-lg shadow-sm transition-all";
+                document.getElementById('nav-scanner-btn').className = "bg-white/25 hover:bg-white/30 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-all";
             }
         };
 
         window.resetSessionCount = () => { 
             if(confirm(`Are you sure you want to reset the ${currentMode.toUpperCase()} session count to 0?`)) { 
-                if (currentMode === 'outward') {
-                    sessionCountOutward = 0; localStorage.setItem('wh_session_outward', 0); 
-                } else {
-                    sessionCountInward = 0; localStorage.setItem('wh_session_inward', 0); 
-                }
+                if (currentMode === 'outward') { sessionCountOutward = 0; localStorage.setItem('wh_session_outward', 0); } 
+                else { sessionCountInward = 0; localStorage.setItem('wh_session_inward', 0); }
                 sessionCountEl.innerText = 0; 
             }
         };
 
         window.handleAWBLookup = () => {
             const query = document.getElementById('lookup-awb-input').value.trim().toUpperCase();
-            const card = document.getElementById('lookup-result-card');
-            const content = document.getElementById('lookup-result-content');
-
+            const card = document.getElementById('lookup-result-card'); const content = document.getElementById('lookup-result-content');
             if (!query) { card.classList.add('hidden'); return; }
-
             let foundIn = null, record = null;
             let matchOut = getMergedData('outward').find(item => item.awb === query);
             
-            if (matchOut) {
-                foundIn = "OUTWARD (Handover)"; record = matchOut;
-            } else {
+            if (matchOut) { foundIn = "OUTWARD (Handover)"; record = matchOut; } 
+            else {
                 let matchIn = getMergedData('inward').find(item => item.awb === query);
                 if (matchIn) { foundIn = "INWARD (Returns)"; record = matchIn; }
             }
 
             card.classList.remove('hidden');
             if (record) {
-                content.innerHTML = `
-                    <p><strong>Status:</strong> <span class="text-green-600 font-bold">Found in ${foundIn}</span></p>
-                    <p><strong>AWB Number:</strong> <span class="font-mono font-bold">${record.awb}</span></p>
-                    <p><strong>Channel/Seller:</strong> ${record.seller}</p>
-                    <p><strong>Courier:</strong> ${record.courier}</p>
-                    <p><strong>Date & Time:</strong> ${record.date} at ${record.time}</p>
-                `;
+                content.innerHTML = `<p><strong>Status:</strong> <span class="text-green-600 font-bold">Found in ${foundIn}</span></p><p><strong>AWB Number:</strong> <span class="font-mono font-bold">${record.awb}</span></p><p><strong>Channel/Seller:</strong> ${record.seller}</p><p><strong>Courier:</strong> ${record.courier}</p><p><strong>Date & Time:</strong> ${record.date} at ${record.time}</p>`;
             } else {
                 content.innerHTML = `<p class="text-red-500 font-semibold">❌ AWB "${query}" not found in database.</p>`;
             }
@@ -807,41 +706,27 @@
         window.exportCSV = () => window.downloadDateRangeReport(currentMode);
         
         window.downloadDateRangeReport = (mode) => {
-            const sDate = document.getElementById('filter-start-date').value;
-            const eDate = document.getElementById('filter-end-date').value;
+            const sDate = document.getElementById('filter-start-date').value; const eDate = document.getElementById('filter-end-date').value;
             let filtered = getMergedData(mode);
-
             if (sDate && eDate) {
                 const start = new Date(sDate); const end = new Date(eDate); end.setHours(23, 59, 59);
                 filtered = filtered.filter(i => { let idt = new Date(i.dateKey); return idt >= start && idt <= end; });
             }
-
             if (filtered.length === 0) { alert('No records found for the selected date range.'); return; }
 
             let csv = "Serial Number,Date,Channel,Courier,AWB,Time\n";
-            
             filtered.forEach((i, idx) => {
                 csv += `${filtered.length - idx},${i.date},${i.seller || 'N/A'},${i.courier},${i.awb},${i.time}\n`;
-                if (mode === 'inward' && (idx + 1) % 20 === 0 && (idx + 1) !== filtered.length) {
-                    csv += ",,,,,\n"; 
-                }
+                if (mode === 'inward' && (idx + 1) % 20 === 0 && (idx + 1) !== filtered.length) csv += ",,,,,\n"; 
             });
-            
-            const link = document.createElement("a"); 
-            link.setAttribute("href", encodeURI("data:text/csv;charset=utf-8," + csv));
-            link.setAttribute("download", `warehouse_report_${mode}_${getLocalDateKey()}.csv`);
-            document.body.appendChild(link); link.click(); document.body.removeChild(link);
+            const link = document.createElement("a"); link.setAttribute("href", encodeURI("data:text/csv;charset=utf-8," + csv)); link.setAttribute("download", `warehouse_report_${mode}_${getLocalDateKey()}.csv`); document.body.appendChild(link); link.click(); document.body.removeChild(link);
         };
 
         window.onload = () => { 
             window.setMode('outward'); 
-            const endDateInput = document.getElementById('filter-end-date');
-            const startDateInput = document.getElementById('filter-start-date');
-            const today = new Date();
-            const fifteenDaysAgo = new Date();
-            fifteenDaysAgo.setDate(today.getDate() - 15);
-            endDateInput.value = getLocalDateKey(today);
-            startDateInput.value = getLocalDateKey(fifteenDaysAgo);
+            const endDateInput = document.getElementById('filter-end-date'); const startDateInput = document.getElementById('filter-start-date');
+            const today = new Date(); const fifteenDaysAgo = new Date(); fifteenDaysAgo.setDate(today.getDate() - 15);
+            endDateInput.value = getLocalDateKey(today); startDateInput.value = getLocalDateKey(fifteenDaysAgo);
         };
     </script>
 </body>

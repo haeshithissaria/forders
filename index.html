@@ -120,11 +120,10 @@
                 <span id="active-list-count" class="bg-gray-800 text-white text-xs font-bold px-3 py-1 rounded-full">0 items</span>
             </div>
             
-            <!-- Added flex flex-col to keep the structure clean -->
             <div class="flex-grow overflow-y-auto p-4 bg-gray-50 flex flex-col">
                 <ul id="scan-list" class="space-y-3"></ul>
                 
-                <!-- NEW: Show More Container -->
+                <!-- Show More Container -->
                 <div id="show-more-container" class="mt-6 mb-2 text-center hidden">
                     <button onclick="loadMoreItems()" class="bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-2 px-6 rounded-full shadow-sm transition-colors text-sm">
                         Show More ⬇️
@@ -181,7 +180,6 @@
         let firebaseData = { outward: [], inward: [] };
         let isSyncing = false; 
         
-        // NEW: Display Limit Variable
         let currentDisplayLimit = 100;
         
         let pendingOutward = JSON.parse(localStorage.getItem('wh_pendingOutward') || '[]');
@@ -245,16 +243,43 @@
             localStorage.setItem('wh_pendingDeletions', JSON.stringify(pendingDeletions));
         }
 
+        // ==========================================
+        // NEW OFFLINE BLOCKING LOGIC (ADDED HERE)
+        // ==========================================
         onValue(ref(db, '.info/connected'), (snapshot) => {
+            const inputField = document.getElementById('awb-input');
+            
             if (snapshot.val() === true) {
+                // इंटरनेट आ गया
                 syncStatusEl.innerText = "☁ Firebase Connected";
                 syncStatusEl.className = "text-xs bg-green-500 text-white font-bold px-2.5 py-1 rounded-full";
+                
+                if (inputField) {
+                    inputField.disabled = false;
+                    inputField.placeholder = "Ready to scan...";
+                    inputField.classList.remove('bg-gray-200', 'cursor-not-allowed'); // वापस नार्मल कलर
+                    inputField.focus();
+                }
+                
+                scanMessage.innerText = ""; // एरर मैसेज हटा दें
                 syncWorker(); 
             } else {
-                syncStatusEl.innerText = "⏳ Offline (Cached)";
-                syncStatusEl.className = "text-xs bg-yellow-400 text-gray-900 font-bold px-2.5 py-1 rounded-full";
+                // इंटरनेट चला गया
+                syncStatusEl.innerText = "⛔ Offline (Blocked)";
+                syncStatusEl.className = "text-xs bg-red-600 text-white font-bold px-2.5 py-1 rounded-full animate-pulse";
+                
+                if (inputField) {
+                    inputField.disabled = true; // स्कैनिंग लॉक
+                    inputField.placeholder = "NO INTERNET - Scanning Paused";
+                    inputField.classList.add('bg-gray-200', 'cursor-not-allowed'); // ग्रे कर दें ताकि पता चले लॉक है
+                    inputField.value = ""; // अगर कुछ टाइप था तो क्लियर कर दें
+                }
+                
+                showMessage("❌ No Internet! Scanning is disabled to prevent duplicates.", "text-white bg-red-600 px-3 py-1 rounded");
+                playSound('error'); // लाल रंग का एरर और साउंड भी आएगा
             }
         });
+        // ==========================================
 
         onValue(ref(db, 'warehouse/outward'), (snapshot) => {
             const val = snapshot.val();
@@ -531,9 +556,8 @@
             syncWorker();
         }
 
-        // NEW: Load More Function
         window.loadMoreItems = () => {
-            currentDisplayLimit += 100; // Load next 100 records
+            currentDisplayLimit += 100;
             renderList();
         };
 
@@ -556,7 +580,6 @@
                 return;
             }
 
-            // NEW: Slice the array based on the display limit
             const itemsToShow = dataToRender.slice(0, currentDisplayLimit);
 
             itemsToShow.forEach((item, index) => {
@@ -585,7 +608,6 @@
                 listEl.appendChild(li);
             });
 
-            // NEW: Show or Hide the Load More Button
             if (dataToRender.length > currentDisplayLimit) {
                 if (showMoreBtn) showMoreBtn.classList.remove('hidden');
             } else {
@@ -713,7 +735,7 @@
 
         window.setMode = (mode) => {
             currentMode = mode;
-            currentDisplayLimit = 100; // NEW: Reset limit on mode switch
+            currentDisplayLimit = 100; 
             
             document.body.className = `mode-${mode} min-h-screen flex flex-col transition-colors`;
             document.getElementById('btn-outward').className = mode === 'outward' ? "flex-1 py-4 text-center font-bold text-lg border-b-4 border-orange-500 bg-orange-50 text-orange-700" : "flex-1 py-4 text-center font-bold text-lg border-b-4 border-transparent text-gray-500 hover:bg-gray-50";

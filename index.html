@@ -19,6 +19,7 @@
 
         /* Courier Badges */
         .badge-myntra { background-color: #d946ef; color: #ffffff; }
+        .badge-myntra-shadowfax { background-color: #701a75; color: #ffffff; }
         .badge-flipkart { background-color: #fde047; color: #1e3a8a; }
         .badge-shadowfax { background-color: #374151; color: #ffffff; }
         .badge-valmo { background-color: #ec4899; color: #ffffff; }
@@ -280,17 +281,21 @@
         function detectCourier(awb) {
             const cleanAwb = awb.replace(/(NYK|AJI|LI)$/, '');
             const len = cleanAwb.length;
-            
+
             if (/[A-Z]/.test(cleanAwb)) {
-                if (cleanAwb.startsWith('SF') || cleanAwb.startsWith('MYSFXHL')) return { name: 'Shadowfax', class: 'badge-shadowfax' };
+                // Route EMS Speed Post (AM...IN) to ATS
+                if (/^[A-Z]{2}\d{9}IN$/.test(cleanAwb)) return { name: 'ATS', class: 'badge-ats' };
+                
+                if (cleanAwb.startsWith('SF') && !cleanAwb.startsWith('MYSF')) return { name: 'Shadowfax', class: 'badge-shadowfax' };
+                if (cleanAwb.startsWith('MYSF')) return { name: 'Myntra Shadowfax', class: 'badge-myntra-shadowfax' };
                 if (cleanAwb.startsWith('VL')) return { name: 'Valmo', class: 'badge-valmo' };
                 if (cleanAwb.startsWith('MH')) return { name: 'ElasticRun', class: 'badge-elasticrun' };
                 if (cleanAwb.startsWith('GS')) return { name: 'ShipRocket', class: 'badge-shiprocket' };
-                if (cleanAwb.startsWith('MY')) return { name: 'Myntra Logistics', class: 'badge-myntra' }; // Sirf MY
+                if (cleanAwb.startsWith('MY') && !cleanAwb.startsWith('MYSF')) return { name: 'Myntra Logistics', class: 'badge-myntra' }; 
                 if (cleanAwb.startsWith('CLQ')) return { name: 'E-Kart (TataCliq)', class: 'badge-flipkart' };
                 if (cleanAwb.startsWith('NK')) return { name: 'E-Kart (Nykaa)', class: 'badge-flipkart' };
                 if (cleanAwb.startsWith('LM')) return { name: 'E-Kart (LimeRoad)', class: 'badge-flipkart' }; 
-                if (cleanAwb.startsWith('FMP')) return { name: 'Flipkart / E-Kart', class: 'badge-flipkart' }; // STRICT FMP ONLY
+                if (cleanAwb.startsWith('FMP')) return { name: 'Flipkart / E-Kart', class: 'badge-flipkart' }; 
                 
             } else if (/^\d+$/.test(cleanAwb)) {
                 if (len === 11) return { name: 'BlueDart', class: 'badge-bluedart' };
@@ -316,18 +321,19 @@
             if (courierName === 'Shadowfax' && ['Amazon', 'Flipkart'].includes(marketplace)) return false;
             if (courierName === 'ElasticRun' && marketplace !== 'Meesho') return false;
             if (courierName === 'ATS' && marketplace !== 'Amazon') return false;
+            if (courierName === 'Myntra Shadowfax' && marketplace !== 'Myntra') return false;
 
             // Strict Signatures
-            const isMyntraSig = awb.startsWith('MY') && !awb.startsWith('MYSFXHL');
+            const isMyntraSig = awb.startsWith('MY'); // Covers MY and MYSF
             const isFlipkartSig = awb.startsWith('FMP'); // STRICT FMP ONLY
             const isValmoSig = awb.startsWith('VL');
-            const isAmazonSig = /^\d{12,16}$/.test(awb);
+            // Added EMS Speed Post format to Amazon Signature check
+            const isAmazonSig = /^\d{12,16}$/.test(awb) || /^[A-Z]{2}\d{9}IN$/.test(awb);
 
             // Galti pakadne ke rules
             if (marketplace === 'Flipkart' && !isFlipkartSig) return false;
             if (marketplace === 'Myntra' && !isMyntraSig) return false;
-            
-            if (marketplace === 'Meesho' && (isFlipkartSig || isMyntraSig || isAmazonSig)) return false;
+            if (marketplace === 'Meesho' && (isFlipkartSig || isMyntraSig)) return false; // Allows all numeric awbs (Xpressbees/Delhivery)
             if (marketplace === 'Amazon' && !isAmazonSig) return false;
             
             return true;
@@ -355,7 +361,7 @@
                     if (awb.startsWith('AJI') || awb.endsWith('AJI')) sellerSelect.value = 'Ajio';
                     else if (awb.startsWith('LM') || awb.endsWith('LI')) sellerSelect.value = 'LimeRoad';
                     else if (awb.startsWith('NK') || awb.endsWith('NYK')) sellerSelect.value = 'Nykaa';
-                    else if (courierInfo.name === 'Myntra Logistics') sellerSelect.value = 'Myntra';
+                    else if (courierInfo.name === 'Myntra Logistics' || courierInfo.name === 'Myntra Shadowfax') sellerSelect.value = 'Myntra';
                     else if (courierInfo.name.includes('TataCliq')) sellerSelect.value = 'TataCliq';
                     else if (courierInfo.name.includes('Nykaa')) sellerSelect.value = 'Nykaa';
                     else if (courierInfo.name.includes('Flipkart')) sellerSelect.value = 'Flipkart';
@@ -370,7 +376,7 @@
                         
                         if (finalSeller === 'Flipkart' && !awb.startsWith('FMP')) {
                             showMessage(`❌ INVALID BARCODE: Flipkart parcel must start with 'FMP'.`, 'text-red-600 bg-red-100 px-3 py-1 rounded');
-                        } else if (finalSeller === 'Myntra' && (!awb.startsWith('MY') || awb.startsWith('MYSFXHL'))) {
+                        } else if (finalSeller === 'Myntra' && !awb.startsWith('MY')) {
                             showMessage(`❌ INVALID BARCODE: Myntra parcel must start with 'MY'.`, 'text-red-600 bg-red-100 px-3 py-1 rounded');
                         } else {
                             showMessage(`❌ Mismatch! This AWB format does not match ${finalSeller}.`, 'text-red-600 bg-red-100 px-3 py-1 rounded');
@@ -567,6 +573,7 @@
             let counts = {
                 'Flipkart / E-Kart': { count: 0, badge: 'badge-flipkart' },
                 'Myntra Logistics': { count: 0, badge: 'badge-myntra' },
+                'Myntra Shadowfax': { count: 0, badge: 'badge-myntra-shadowfax' },
                 'Delhivery': { count: 0, badge: 'badge-delhivery' },
                 'Xpressbees': { count: 0, badge: 'badge-xpressbees' },
                 'Shadowfax': { count: 0, badge: 'badge-shadowfax' },
@@ -586,7 +593,7 @@
             statsEl.innerHTML = '';
             
             for (const [courier, info] of Object.entries(counts)) {
-                if (info.count === 0 && !['Flipkart / E-Kart', 'Myntra Logistics', 'Delhivery', 'Xpressbees', 'Shadowfax', 'BlueDart', 'ATS'].includes(courier)) {
+                if (info.count === 0 && !['Flipkart / E-Kart', 'Myntra Logistics', 'Myntra Shadowfax', 'Delhivery', 'Xpressbees', 'Shadowfax', 'BlueDart', 'ATS'].includes(courier)) {
                     continue; 
                 }
                 statsEl.innerHTML += `

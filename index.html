@@ -285,6 +285,8 @@
             if (/[A-Z]/.test(cleanAwb)) {
                 // Route EMS Speed Post (AM...IN) to ATS
                 if (/^[A-Z]{2}\d{9}IN$/.test(cleanAwb)) return { name: 'ATS', class: 'badge-ats' };
+                // Route Wishlink Ekart (SRSC...)
+                if (cleanAwb.startsWith('SRSC')) return { name: 'E-Kart (Wishlink)', class: 'badge-flipkart' };
                 
                 if (cleanAwb.startsWith('SF') && !cleanAwb.startsWith('MYSF')) return { name: 'Shadowfax', class: 'badge-shadowfax' };
                 if (cleanAwb.startsWith('MYSF')) return { name: 'Myntra Shadowfax', class: 'badge-myntra-shadowfax' };
@@ -314,27 +316,29 @@
             const courierObj = detectCourier(awb);
             const courierName = courierObj.name;
             
-            if (courierName === 'BlueDart' && ['Meesho', 'Flipkart', 'Myntra', 'Amazon'].includes(marketplace)) return false;
+            if (courierName === 'BlueDart' && ['Meesho', 'Flipkart', 'Myntra', 'Amazon', 'Wishlink'].includes(marketplace)) return false;
             if (courierName === 'Valmo' && marketplace !== 'Meesho') return false;
-            if (courierName === 'Delhivery' && ['Flipkart', 'Myntra', 'Amazon'].includes(marketplace)) return false;
-            if (courierName === 'Xpressbees' && ['Flipkart', 'Myntra', 'Amazon'].includes(marketplace)) return false;
-            if (courierName === 'Shadowfax' && ['Amazon', 'Flipkart'].includes(marketplace)) return false;
+            if (courierName === 'Delhivery' && ['Flipkart', 'Myntra', 'Amazon', 'Wishlink'].includes(marketplace)) return false;
+            if (courierName === 'Xpressbees' && ['Flipkart', 'Myntra', 'Amazon', 'Wishlink'].includes(marketplace)) return false;
+            if (courierName === 'Shadowfax' && ['Amazon', 'Flipkart', 'Wishlink'].includes(marketplace)) return false;
             if (courierName === 'ElasticRun' && marketplace !== 'Meesho') return false;
             if (courierName === 'ATS' && marketplace !== 'Amazon') return false;
             if (courierName === 'Myntra Shadowfax' && marketplace !== 'Myntra') return false;
+            if (courierName === 'E-Kart (Wishlink)' && marketplace !== 'Wishlink') return false;
 
             // Strict Signatures
             const isMyntraSig = awb.startsWith('MY'); // Covers MY and MYSF
             const isFlipkartSig = awb.startsWith('FMP'); // STRICT FMP ONLY
             const isValmoSig = awb.startsWith('VL');
-            // Added EMS Speed Post format to Amazon Signature check
+            const isWishlinkSig = awb.startsWith('SRSC');
             const isAmazonSig = /^\d{12,16}$/.test(awb) || /^[A-Z]{2}\d{9}IN$/.test(awb);
 
             // Galti pakadne ke rules
             if (marketplace === 'Flipkart' && !isFlipkartSig) return false;
             if (marketplace === 'Myntra' && !isMyntraSig) return false;
-            if (marketplace === 'Meesho' && (isFlipkartSig || isMyntraSig)) return false; // Allows all numeric awbs (Xpressbees/Delhivery)
+            if (marketplace === 'Meesho' && (isFlipkartSig || isMyntraSig || isWishlinkSig)) return false; // Allows numeric awbs
             if (marketplace === 'Amazon' && !isAmazonSig) return false;
+            if (marketplace === 'Wishlink' && !isWishlinkSig) return false;
             
             return true;
         }
@@ -364,6 +368,7 @@
                     else if (courierInfo.name === 'Myntra Logistics' || courierInfo.name === 'Myntra Shadowfax') sellerSelect.value = 'Myntra';
                     else if (courierInfo.name.includes('TataCliq')) sellerSelect.value = 'TataCliq';
                     else if (courierInfo.name.includes('Nykaa')) sellerSelect.value = 'Nykaa';
+                    else if (courierInfo.name === 'E-Kart (Wishlink)' || awb.startsWith('SRSC')) sellerSelect.value = 'Wishlink';
                     else if (courierInfo.name.includes('Flipkart')) sellerSelect.value = 'Flipkart';
                     else if (courierInfo.name === 'Valmo' || courierInfo.name === 'ElasticRun') sellerSelect.value = 'Meesho';
                     else if (courierInfo.name === 'ATS') sellerSelect.value = 'Amazon';
@@ -378,6 +383,8 @@
                             showMessage(`❌ INVALID BARCODE: Flipkart parcel must start with 'FMP'.`, 'text-red-600 bg-red-100 px-3 py-1 rounded');
                         } else if (finalSeller === 'Myntra' && !awb.startsWith('MY')) {
                             showMessage(`❌ INVALID BARCODE: Myntra parcel must start with 'MY'.`, 'text-red-600 bg-red-100 px-3 py-1 rounded');
+                        } else if (finalSeller === 'Wishlink' && !awb.startsWith('SRSC')) {
+                            showMessage(`❌ INVALID BARCODE: Wishlink parcel must start with 'SRSC'.`, 'text-red-600 bg-red-100 px-3 py-1 rounded');
                         } else {
                             showMessage(`❌ Mismatch! This AWB format does not match ${finalSeller}.`, 'text-red-600 bg-red-100 px-3 py-1 rounded');
                         }
@@ -533,7 +540,7 @@
                 const isPending = pendingFirebaseWrites.has(item.awb);
                 const syncBadge = isPending 
                     ? `<span class="text-[10px] bg-amber-100 text-amber-700 font-bold px-2 py-0.5 rounded-full ml-2 animate-pulse">⏳ Syncing</span>`
-                    : `<span class="text-[10px] bg-green-100 text-green-700 font-bold px-2 py-0.5 rounded-full ml-2">☁️ Synced</span>`;
+                    : `<span class="text-[10px] bg-green-100 text-green-700 font-bold px-2 py-0.5 rounded-full ml-2">☁️️ Synced</span>`;
 
                 li.innerHTML = `
                     <div class="flex items-center space-x-4">
@@ -572,6 +579,7 @@
 
             let counts = {
                 'Flipkart / E-Kart': { count: 0, badge: 'badge-flipkart' },
+                'E-Kart (Wishlink)': { count: 0, badge: 'badge-flipkart' },
                 'Myntra Logistics': { count: 0, badge: 'badge-myntra' },
                 'Myntra Shadowfax': { count: 0, badge: 'badge-myntra-shadowfax' },
                 'Delhivery': { count: 0, badge: 'badge-delhivery' },
@@ -593,7 +601,7 @@
             statsEl.innerHTML = '';
             
             for (const [courier, info] of Object.entries(counts)) {
-                if (info.count === 0 && !['Flipkart / E-Kart', 'Myntra Logistics', 'Myntra Shadowfax', 'Delhivery', 'Xpressbees', 'Shadowfax', 'BlueDart', 'ATS'].includes(courier)) {
+                if (info.count === 0 && !['Flipkart / E-Kart', 'E-Kart (Wishlink)', 'Myntra Logistics', 'Myntra Shadowfax', 'Delhivery', 'Xpressbees', 'Shadowfax', 'BlueDart', 'ATS'].includes(courier)) {
                     continue; 
                 }
                 statsEl.innerHTML += `

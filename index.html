@@ -316,11 +316,11 @@
             const courierObj = detectCourier(awb);
             const courierName = courierObj.name;
             
-            if (courierName === 'BlueDart' && ['Meesho', 'Flipkart', 'Myntra', 'Amazon', 'Wishlink'].includes(marketplace)) return false;
+            if (courierName === 'BlueDart' && ['Meesho', 'Flipkart', 'Myntra', 'Amazon'].includes(marketplace)) return false;
             if (courierName === 'Valmo' && marketplace !== 'Meesho') return false;
-            if (courierName === 'Delhivery' && ['Flipkart', 'Myntra', 'Amazon', 'Wishlink'].includes(marketplace)) return false;
-            if (courierName === 'Xpressbees' && ['Flipkart', 'Myntra', 'Amazon', 'Wishlink'].includes(marketplace)) return false;
-            if (courierName === 'Shadowfax' && ['Amazon', 'Flipkart', 'Wishlink'].includes(marketplace)) return false;
+            if (courierName === 'Delhivery' && ['Flipkart', 'Myntra', 'Amazon'].includes(marketplace)) return false;
+            if (courierName === 'Xpressbees' && ['Flipkart', 'Myntra', 'Amazon'].includes(marketplace)) return false;
+            if (courierName === 'Shadowfax' && ['Amazon', 'Flipkart'].includes(marketplace)) return false;
             if (courierName === 'ElasticRun' && marketplace !== 'Meesho') return false;
             if (courierName === 'ATS' && marketplace !== 'Amazon') return false;
             if (courierName === 'Myntra Shadowfax' && marketplace !== 'Myntra') return false;
@@ -330,7 +330,7 @@
             const isMyntraSig = awb.startsWith('MY'); // Covers MY and MYSF
             const isFlipkartSig = awb.startsWith('FMP'); // STRICT FMP ONLY
             const isValmoSig = awb.startsWith('VL');
-            const isWishlinkSig = awb.startsWith('SRSC');
+            const isWishlinkSig = awb.startsWith('SRSC') || ['Xpressbees', 'BlueDart', 'Shadowfax', 'Delhivery'].includes(courierName);
             const isAmazonSig = /^\d{12,16}$/.test(awb) || /^[A-Z]{2}\d{9}IN$/.test(awb);
 
             // Galti pakadne ke rules
@@ -383,8 +383,8 @@
                             showMessage(`❌ INVALID BARCODE: Flipkart parcel must start with 'FMP'.`, 'text-red-600 bg-red-100 px-3 py-1 rounded');
                         } else if (finalSeller === 'Myntra' && !awb.startsWith('MY')) {
                             showMessage(`❌ INVALID BARCODE: Myntra parcel must start with 'MY'.`, 'text-red-600 bg-red-100 px-3 py-1 rounded');
-                        } else if (finalSeller === 'Wishlink' && !awb.startsWith('SRSC')) {
-                            showMessage(`❌ INVALID BARCODE: Wishlink parcel must start with 'SRSC'.`, 'text-red-600 bg-red-100 px-3 py-1 rounded');
+                        } else if (finalSeller === 'Wishlink' && !awb.startsWith('SRSC') && !['Xpressbees', 'BlueDart', 'Shadowfax', 'Delhivery'].includes(courierInfo.name)) {
+                            showMessage(`❌ INVALID BARCODE: Wishlink parcel must start with 'SRSC' or be a valid Xpressbees, BlueDart, Shadowfax, or Delhivery AWB.`, 'text-red-600 bg-red-100 px-3 py-1 rounded');
                         } else {
                             showMessage(`❌ Mismatch! This AWB format does not match ${finalSeller}.`, 'text-red-600 bg-red-100 px-3 py-1 rounded');
                         }
@@ -540,7 +540,7 @@
                 const isPending = pendingFirebaseWrites.has(item.awb);
                 const syncBadge = isPending 
                     ? `<span class="text-[10px] bg-amber-100 text-amber-700 font-bold px-2 py-0.5 rounded-full ml-2 animate-pulse">⏳ Syncing</span>`
-                    : `<span class="text-[10px] bg-green-100 text-green-700 font-bold px-2 py-0.5 rounded-full ml-2">☁️️ Synced</span>`;
+                    : `<span class="text-[10px] bg-green-100 text-green-700 font-bold px-2 py-0.5 rounded-full ml-2">☁ Synced</span>`;
 
                 li.innerHTML = `
                     <div class="flex items-center space-x-4">

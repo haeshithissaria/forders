@@ -330,7 +330,10 @@
             const isMyntraSig = awb.startsWith('MY'); // Covers MY and MYSF
             const isFlipkartSig = awb.startsWith('FMP'); // STRICT FMP ONLY
             const isValmoSig = awb.startsWith('VL');
-            const isWishlinkSig = awb.startsWith('SRSC') || ['Xpressbees', 'BlueDart', 'Shadowfax', 'Delhivery'].includes(courierName);
+            
+            // Fix: Keep isWishlinkSig strictly for Wishlink Ekart prefixes so it doesn't break Xpressbees/Delhivery on other channels
+            const isWishlinkSig = awb.startsWith('SRSC');
+            
             const isAmazonSig = /^\d{12,16}$/.test(awb) || /^[A-Z]{2}\d{9}IN$/.test(awb);
 
             // Galti pakadne ke rules
@@ -338,7 +341,9 @@
             if (marketplace === 'Myntra' && !isMyntraSig) return false;
             if (marketplace === 'Meesho' && (isFlipkartSig || isMyntraSig || isWishlinkSig)) return false; // Allows numeric awbs
             if (marketplace === 'Amazon' && !isAmazonSig) return false;
-            if (marketplace === 'Wishlink' && !isWishlinkSig) return false;
+            
+            // Fix: Wishlink validates if it has the SRSC signature OR if it is one of the shared couriers
+            if (marketplace === 'Wishlink' && !isWishlinkSig && !['Xpressbees', 'BlueDart', 'Shadowfax', 'Delhivery'].includes(courierName)) return false;
             
             return true;
         }

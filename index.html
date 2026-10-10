@@ -10,7 +10,7 @@
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f3f4f6; }
         .mode-outward { --primary: #f97316; --primary-hover: #ea580c; --bg-accent: #fff7ed; }
         .mode-inward { --primary: #3b82f6; --primary-hover: #2563eb; --bg-accent: #eff6ff; }
-
+        
         .theme-bg { background-color: var(--primary); }
         .theme-text { color: var(--primary); }
         .theme-border { border-color: var(--primary); }
@@ -52,7 +52,7 @@
 
     <!-- VIEW 1: SCANNER VIEW -->
     <main id="view-scanner" class="flex-grow max-w-7xl mx-auto px-4 py-8 w-full grid grid-cols-1 lg:grid-cols-3 gap-8">
-
+        
         <!-- Left Column -->
         <div class="lg:col-span-1 space-y-6">
             <!-- Mode Selector -->
@@ -99,9 +99,8 @@
                 <input type="text" id="awb-input" autocomplete="off" placeholder="Ready to scan..." 
                     oninput="this.value = this.value.replace(/[^a-zA-Z0-9|]/g, '')"
                     class="w-full text-2xl p-4 border-2 theme-border rounded-lg focus:outline-none focus:ring-4 transition-all uppercase font-mono shadow-inner disabled:bg-gray-200 disabled:cursor-not-allowed">
-
+                
                 <!-- SCAN MESSAGE AREA -->
-                <p id="scan-message" class="mt-3 text-sm font-medium h-auto"></p>
                 <p id="scan-message" class="mt-3 text-sm font-medium h-5"></p>
             </div>
 
@@ -121,10 +120,10 @@
                 <h2 class="text-xl font-bold text-gray-800">Scan History: <span id="current-mode-label" class="theme-text">OUTWARD</span></h2>
                 <span id="active-list-count" class="bg-gray-800 text-white text-xs font-bold px-3 py-1 rounded-full">0 items</span>
             </div>
-
+            
             <div class="flex-grow overflow-y-auto p-4 bg-gray-50 flex flex-col">
                 <ul id="scan-list" class="space-y-3"></ul>
-
+                
                 <!-- Show More Container -->
                 <div id="show-more-container" class="mt-6 mb-2 text-center hidden">
                     <button onclick="loadMoreItems()" class="bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-2 px-6 rounded-full shadow-sm transition-colors text-sm">
@@ -181,9 +180,9 @@
         let currentMode = 'outward'; 
         let firebaseData = { outward: [], inward: [] };
         let currentDisplayLimit = 100;
-
+        
         let pendingFirebaseWrites = new Set();
-
+        
         let sessionCountOutward = parseInt(localStorage.getItem('wh_session_outward') || '0');
         let sessionCountInward = parseInt(localStorage.getItem('wh_session_inward') || '0');
 
@@ -264,7 +263,7 @@
             firebaseData.outward = flattenFirebaseData(val);
             updateUI();
         });
-
+        
         onValue(ref(db, 'warehouse/inward'), (snapshot) => {
             const val = snapshot.val();
             cleanUpOldDates(val, 'inward');
@@ -286,12 +285,9 @@
             if (/[A-Z]/.test(cleanAwb)) {
                 // Route EMS Speed Post (AM...IN) to ATS
                 if (/^[A-Z]{2}\d{9}IN$/.test(cleanAwb)) return { name: 'ATS', class: 'badge-ats' };
-                
-                // Route Wishlink Ekart (SRSC... or SRSP...)
-                if (cleanAwb.startsWith('SRSC') || cleanAwb.startsWith('SRSP')) return { name: 'E-Kart (Wishlink)', class: 'badge-flipkart' };
                 // Route Wishlink Ekart (SRSC...)
                 if (cleanAwb.startsWith('SRSC')) return { name: 'E-Kart (Wishlink)', class: 'badge-flipkart' };
-
+                
                 if (cleanAwb.startsWith('SF') && !cleanAwb.startsWith('MYSF')) return { name: 'Shadowfax', class: 'badge-shadowfax' };
                 if (cleanAwb.startsWith('MYSF')) return { name: 'Myntra Shadowfax', class: 'badge-myntra-shadowfax' };
                 if (cleanAwb.startsWith('VL')) return { name: 'Valmo', class: 'badge-valmo' };
@@ -302,7 +298,7 @@
                 if (cleanAwb.startsWith('NK')) return { name: 'E-Kart (Nykaa)', class: 'badge-flipkart' };
                 if (cleanAwb.startsWith('LM')) return { name: 'E-Kart (LimeRoad)', class: 'badge-flipkart' }; 
                 if (cleanAwb.startsWith('FMP')) return { name: 'Flipkart / E-Kart', class: 'badge-flipkart' }; 
-
+                
             } else if (/^\d+$/.test(cleanAwb)) {
                 if (len === 11) return { name: 'BlueDart', class: 'badge-bluedart' };
                 if (len === 12) return { name: 'ATS', class: 'badge-ats' }; 
@@ -319,7 +315,7 @@
         function verifyMarketplaceMatch(awb, marketplace) {
             const courierObj = detectCourier(awb);
             const courierName = courierObj.name;
-
+            
             if (courierName === 'BlueDart' && ['Meesho', 'Flipkart', 'Myntra', 'Amazon'].includes(marketplace)) return false;
             if (courierName === 'Valmo' && marketplace !== 'Meesho') return false;
             if (courierName === 'Delhivery' && ['Flipkart', 'Myntra', 'Amazon'].includes(marketplace)) return false;
@@ -334,26 +330,21 @@
             const isMyntraSig = awb.startsWith('MY'); // Covers MY and MYSF
             const isFlipkartSig = awb.startsWith('FMP'); // STRICT FMP ONLY
             const isValmoSig = awb.startsWith('VL');
-
-            // Support for both SRSC and SRSP for Wishlink Ekart
-            const isWishlinkSig = awb.startsWith('SRSC') || awb.startsWith('SRSP');
+            
             // Fix: Keep isWishlinkSig strictly for Wishlink Ekart prefixes so it doesn't break Xpressbees/Delhivery on other channels
             const isWishlinkSig = awb.startsWith('SRSC');
-
+            
             const isAmazonSig = /^\d{12,16}$/.test(awb) \vert{}\vert{} /^[A-Z]{2}\d{9}IN$/.test(awb);
-            const isAmazonSig = /^\d{12,16}$/.test(awb) || /^[A-Z]{2}\d{9}IN$/.test(awb);
 
-            // Error Checking Rules
             // Galti pakadne ke rules
             if (marketplace === 'Flipkart' && !isFlipkartSig) return false;
             if (marketplace === 'Myntra' && !isMyntraSig) return false;
             if (marketplace === 'Meesho' && (isFlipkartSig || isMyntraSig || isWishlinkSig)) return false; // Allows numeric awbs
             if (marketplace === 'Amazon' && !isAmazonSig) return false;
-
-            // Wishlink validates if it has the SRSC/SRSP signature OR if it is one of the shared couriers
+            
             // Fix: Wishlink validates if it has the SRSC signature OR if it is one of the shared couriers
             if (marketplace === 'Wishlink' && !isWishlinkSig && !['Xpressbees', 'BlueDart', 'Shadowfax', 'Delhivery'].includes(courierName)) return false;
-
+            
             return true;
         }
 
@@ -364,13 +355,6 @@
 
                 let awb = this.value.toUpperCase().split('|')[0].replace(/[^A-Z0-9]/g, "").trim();
                 if (awb === '') return;
-
-                // === MINIMUM LENGTH CHECK ===
-                if (awb.length < 7) {
-                    playSound('error');
-                    showMessage(`❌ INVALID BARCODE: AWB must be at least 7 characters long.`, 'text-red-600 bg-red-100 px-3 py-1 rounded');
-                    this.value = ''; this.focus(); return;
-                }
                 
                 if (awb.startsWith('SWLOMS') || awb.startsWith('MPP') || awb.startsWith('EPTS')) {
                     playSound('error');
@@ -389,30 +373,27 @@
                     else if (courierInfo.name === 'Myntra Logistics' || courierInfo.name === 'Myntra Shadowfax') sellerSelect.value = 'Myntra';
                     else if (courierInfo.name.includes('TataCliq')) sellerSelect.value = 'TataCliq';
                     else if (courierInfo.name.includes('Nykaa')) sellerSelect.value = 'Nykaa';
-                    else if (courierInfo.name === 'E-Kart (Wishlink)' || awb.startsWith('SRSC') || awb.startsWith('SRSP')) sellerSelect.value = 'Wishlink';
                     else if (courierInfo.name === 'E-Kart (Wishlink)' || awb.startsWith('SRSC')) sellerSelect.value = 'Wishlink';
                     else if (courierInfo.name.includes('Flipkart')) sellerSelect.value = 'Flipkart';
                     else if (courierInfo.name === 'Valmo' || courierInfo.name === 'ElasticRun') sellerSelect.value = 'Meesho';
                     else if (courierInfo.name === 'ATS') sellerSelect.value = 'Amazon';
-
+                    
                     const finalSeller = sellerSelect.value;
 
                     // ====== CUSTOM ERROR MESSAGES ======
                     if (!verifyMarketplaceMatch(awb, finalSeller)) {
                         playSound('error');
-
+                        
                         if (finalSeller === 'Flipkart' && !awb.startsWith('FMP')) {
                             showMessage(`❌ INVALID BARCODE: Flipkart parcel must start with 'FMP'.`, 'text-red-600 bg-red-100 px-3 py-1 rounded');
                         } else if (finalSeller === 'Myntra' && !awb.startsWith('MY')) {
                             showMessage(`❌ INVALID BARCODE: Myntra parcel must start with 'MY'.`, 'text-red-600 bg-red-100 px-3 py-1 rounded');
-                        } else if (finalSeller === 'Wishlink' && !awb.startsWith('SRSC') && !awb.startsWith('SRSP') && !['Xpressbees', 'BlueDart', 'Shadowfax', 'Delhivery'].includes(courierInfo.name)) {
-                            showMessage(`❌ INVALID BARCODE: Wishlink parcel must start with 'SRSC' or 'SRSP', or be a valid Xpressbees, BlueDart, Shadowfax, or Delhivery AWB.`, 'text-red-600 bg-red-100 px-3 py-1 rounded mb-2 inline-block');
                         } else if (finalSeller === 'Wishlink' && !awb.startsWith('SRSC') && !['Xpressbees', 'BlueDart', 'Shadowfax', 'Delhivery'].includes(courierInfo.name)) {
                             showMessage(`❌ INVALID BARCODE: Wishlink parcel must start with 'SRSC' or be a valid Xpressbees, BlueDart, Shadowfax, or Delhivery AWB.`, 'text-red-600 bg-red-100 px-3 py-1 rounded');
                         } else {
                             showMessage(`❌ Mismatch! This AWB format does not match ${finalSeller}.`, 'text-red-600 bg-red-100 px-3 py-1 rounded');
                         }
-
+                        
                         this.value = ''; this.focus(); return;
                     }
 
@@ -432,13 +413,13 @@
 
                     const inwardMerged = getMergedData('inward');
                     const inwardMatch = inwardMerged.find(item => item.awb === awb);
-
+                    
                     if (inwardMatch) {
                         pendingFirebaseWrites.add(`del_in_${awb}`);
                         updateSyncStatusUI();
                         remove(ref(db, `warehouse/inward/${inwardMatch.dateKey}/${inwardMatch.courier}/${inwardMatch.seller}/${inwardMatch.awb}`))
                             .then(() => { pendingFirebaseWrites.delete(`del_in_${awb}`); updateSyncStatusUI(); });
-
+                        
                         customMsg = `🔄 Restored to Outward & Removed from Inward: ${awb}`;
                         colorClass = 'text-blue-700 bg-blue-100 px-3 py-1 rounded';
                     }
@@ -448,7 +429,7 @@
                 } else if (currentMode === 'inward') {
                     const outwardMerged = getMergedData('outward');
                     const outwardMatch = outwardMerged.find(item => item.awb === awb);
-
+                    
                     if (!outwardMatch) {
                         playSound('error');
                         showMessage(`❌ ERROR: AWB not found in Outward. Cannot Inward.`, 'text-red-600 bg-red-100 px-3 py-1 rounded');
@@ -464,7 +445,7 @@
                     }
 
                     const finalSeller = outwardMatch.seller;
-
+                    
                     pendingFirebaseWrites.add(`del_out_${awb}`);
                     updateSyncStatusUI();
                     remove(ref(db, `warehouse/outward/${outwardMatch.dateKey}/${outwardMatch.courier}/${outwardMatch.seller}/${outwardMatch.awb}`))
@@ -506,7 +487,7 @@
                 localStorage.setItem('wh_session_inward', sessionCountInward);
                 sessionCountEl.innerText = sessionCountInward;
             }
-
+            
             showMessage(customMsg, colorClass);
             playSound('success');
 
@@ -518,7 +499,7 @@
             updateSyncStatusUI(); 
 
             const path = `warehouse/${currentMode}/${dateKey}/${courierInfo.name}/${finalSeller}/${awb}`;
-
+            
             set(ref(db, path), newItem)
                 .then(() => {
                     pendingFirebaseWrites.delete(awb);
@@ -540,7 +521,7 @@
             const listEl = document.getElementById('scan-list');
             const showMoreBtn = document.getElementById('show-more-container');
             const dataToRender = getMergedData(currentMode);
-
+            
             document.getElementById('active-list-count').innerText = `${dataToRender.length} items`;
             listEl.innerHTML = '';
 
@@ -560,7 +541,7 @@
             itemsToShow.forEach((item, index) => {
                 const li = document.createElement('li');
                 li.className = "bg-white p-4 rounded-lg shadow-sm border border-gray-200 flex justify-between items-center mb-3";
-
+                
                 const isPending = pendingFirebaseWrites.has(item.awb);
                 const syncBadge = isPending 
                     ? `<span class="text-[10px] bg-amber-100 text-amber-700 font-bold px-2 py-0.5 rounded-full ml-2 animate-pulse">⏳ Syncing</span>`
@@ -623,7 +604,7 @@
             });
 
             statsEl.innerHTML = '';
-
+            
             for (const [courier, info] of Object.entries(counts)) {
                 if (info.count === 0 && !['Flipkart / E-Kart', 'E-Kart (Wishlink)', 'Myntra Logistics', 'Myntra Shadowfax', 'Delhivery', 'Xpressbees', 'Shadowfax', 'BlueDart', 'ATS'].includes(courier)) {
                     continue; 
@@ -726,7 +707,7 @@
             if (!query) { card.classList.add('hidden'); return; }
             let foundIn = null, record = null;
             let matchOut = getMergedData('outward').find(item => item.awb === query);
-
+            
             if (matchOut) { foundIn = "OUTWARD (Handover)"; record = matchOut; } 
             else {
                 let matchIn = getMergedData('inward').find(item => item.awb === query);
@@ -742,7 +723,7 @@
         };
 
         window.exportCSV = () => window.downloadDateRangeReport(currentMode);
-
+        
         window.downloadDateRangeReport = (mode) => {
             const sDate = document.getElementById('filter-start-date').value; 
             const eDate = document.getElementById('filter-end-date').value;

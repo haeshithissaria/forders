@@ -10,7 +10,7 @@
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f3f4f6; }
         .mode-outward { --primary: #f97316; --primary-hover: #ea580c; --bg-accent: #fff7ed; }
         .mode-inward { --primary: #3b82f6; --primary-hover: #2563eb; --bg-accent: #eff6ff; }
-        
+
         .theme-bg { background-color: var(--primary); }
         .theme-text { color: var(--primary); }
         .theme-border { border-color: var(--primary); }
@@ -19,6 +19,7 @@
 
         /* Courier Badges */
         .badge-myntra { background-color: #d946ef; color: #ffffff; }
+        .badge-myntra-shadowfax { background-color: #701a75; color: #ffffff; }
         .badge-flipkart { background-color: #fde047; color: #1e3a8a; }
         .badge-shadowfax { background-color: #374151; color: #ffffff; }
         .badge-valmo { background-color: #ec4899; color: #ffffff; }
@@ -51,7 +52,7 @@
 
     <!-- VIEW 1: SCANNER VIEW -->
     <main id="view-scanner" class="flex-grow max-w-7xl mx-auto px-4 py-8 w-full grid grid-cols-1 lg:grid-cols-3 gap-8">
-        
+
         <!-- Left Column -->
         <div class="lg:col-span-1 space-y-6">
             <!-- Mode Selector -->
@@ -98,8 +99,9 @@
                 <input type="text" id="awb-input" autocomplete="off" placeholder="Ready to scan..." 
                     oninput="this.value = this.value.replace(/[^a-zA-Z0-9|]/g, '')"
                     class="w-full text-2xl p-4 border-2 theme-border rounded-lg focus:outline-none focus:ring-4 transition-all uppercase font-mono shadow-inner disabled:bg-gray-200 disabled:cursor-not-allowed">
-                
+
                 <!-- SCAN MESSAGE AREA -->
+                <p id="scan-message" class="mt-3 text-sm font-medium h-auto"></p>
                 <p id="scan-message" class="mt-3 text-sm font-medium h-5"></p>
             </div>
 
@@ -109,20 +111,20 @@
                 <div id="courier-stats" class="space-y-4"></div>
             </div>
             <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                <button onclick="exportCSV()" class="w-full theme-bg text-white font-bold py-3 px-4 rounded-lg shadow-sm theme-btn transition-colors">Export Today's List to CSV</button>
+                <button onclick="exportCSV()" class="w-full theme-bg text-white font-bold py-3 px-4 rounded-lg shadow-sm theme-btn transition-colors">Export Active List to CSV</button>
             </div>
         </div>
 
         <!-- Right Column: Scan History -->
         <div class="lg:col-span-2 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col h-[800px]">
             <div class="p-6 border-b border-gray-100 flex justify-between items-center theme-accent transition-colors duration-300">
-                <h2 class="text-xl font-bold text-gray-800">Today's History: <span id="current-mode-label" class="theme-text">OUTWARD</span></h2>
+                <h2 class="text-xl font-bold text-gray-800">Scan History: <span id="current-mode-label" class="theme-text">OUTWARD</span></h2>
                 <span id="active-list-count" class="bg-gray-800 text-white text-xs font-bold px-3 py-1 rounded-full">0 items</span>
             </div>
-            
+
             <div class="flex-grow overflow-y-auto p-4 bg-gray-50 flex flex-col">
                 <ul id="scan-list" class="space-y-3"></ul>
-                
+
                 <!-- Show More Container -->
                 <div id="show-more-container" class="mt-6 mb-2 text-center hidden">
                     <button onclick="loadMoreItems()" class="bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-2 px-6 rounded-full shadow-sm transition-colors text-sm">
@@ -139,8 +141,7 @@
             <h2 class="text-2xl font-bold text-gray-800 mb-6 border-b pb-4">📊 Reports Dashboard</h2>
             <div class="mb-8 bg-gray-50 p-6 rounded-xl border border-gray-200">
                 <h3 class="text-lg font-bold text-gray-700 mb-3">🔍 Instant AWB Lookup</h3>
-                <!-- oninput removed, event listener added in JS to save bandwidth -->
-                <input type="text" id="lookup-awb-input" placeholder="Scan AWB and press Enter..." class="w-full p-3 border-2 border-gray-300 rounded-lg uppercase font-mono text-lg bg-white shadow-inner">
+                <input type="text" id="lookup-awb-input" placeholder="Scan AWB..." oninput="handleAWBLookup()" class="w-full p-3 border-2 border-gray-300 rounded-lg uppercase font-mono text-lg bg-white">
                 <div id="lookup-result-card" class="mt-4 bg-white p-4 rounded-lg border hidden">
                     <div id="lookup-result-content" class="space-y-1 text-gray-700"></div>
                 </div>
@@ -152,8 +153,8 @@
                     <input type="date" id="filter-end-date" class="w-full p-3 border border-gray-300 rounded-lg">
                 </div>
                 <div class="flex gap-4">
-                    <button onclick="downloadDateRangeReport('outward', this)" class="bg-orange-600 hover:bg-orange-700 text-white font-bold px-6 py-3 rounded-lg shadow transition-colors w-full">Download Outward (CSV)</button>
-                    <button onclick="downloadDateRangeReport('inward', this)" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-3 rounded-lg shadow transition-colors w-full">Download Inward (CSV)</button>
+                    <button onclick="downloadDateRangeReport('outward')" class="bg-orange-600 hover:bg-orange-700 text-white font-bold px-6 py-3 rounded-lg shadow transition-colors">Download Outward (CSV)</button>
+                    <button onclick="downloadDateRangeReport('inward')" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-3 rounded-lg shadow transition-colors">Download Inward (CSV)</button>
                 </div>
             </div>
         </div>
@@ -161,9 +162,8 @@
 
     <!-- Application Logic -->
     <script type="module">
-        // Added 'get' in the imports to fetch data on demand for reports
         import { initializeApp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";
-        import { getDatabase, ref, set, remove, onValue, get } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-database.js";
+        import { getDatabase, ref, set, remove, onValue } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-database.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyDMCPEiwQX6v7zzUfrYKwdN2mL7OzlGvjc",
@@ -181,9 +181,9 @@
         let currentMode = 'outward'; 
         let firebaseData = { outward: [], inward: [] };
         let currentDisplayLimit = 100;
-        
+
         let pendingFirebaseWrites = new Set();
-        
+
         let sessionCountOutward = parseInt(localStorage.getItem('wh_session_outward') || '0');
         let sessionCountInward = parseInt(localStorage.getItem('wh_session_inward') || '0');
 
@@ -200,8 +200,17 @@
             return `${y}-${m}-${d}`;
         }
 
-        // Removed cleanUpOldDates to stop the app from downloading history just to check dates. 
-        // If you need to clear old data, it should be done from Firebase console or a separate secure admin script.
+        function cleanUpOldDates(snapshotVal, mode) {
+            if (!snapshotVal) return;
+            const cutoffDate = new Date();
+            cutoffDate.setDate(cutoffDate.getDate() - 15);
+            const cutoffDateStr = getLocalDateKey(cutoffDate); 
+            Object.keys(snapshotVal).forEach(dateKey => {
+                if (dateKey < cutoffDateStr) {
+                    remove(ref(db, `warehouse/${mode}/${dateKey}`)).catch(e => console.error(e));
+                }
+            });
+        }
 
         function flattenFirebaseData(snapshotVal) {
             let items = [];
@@ -249,18 +258,16 @@
             }
         });
 
-        // FIX 1: Only attach live listener to TODAY'S date. 
-        // This saves massive bandwidth by not pulling 15 days of data on every load or scan.
-        const todayDateStr = getLocalDateKey();
-
-        onValue(ref(db, `warehouse/outward/${todayDateStr}`), (snapshot) => {
+        onValue(ref(db, 'warehouse/outward'), (snapshot) => {
             const val = snapshot.val();
+            cleanUpOldDates(val, 'outward');
             firebaseData.outward = flattenFirebaseData(val);
             updateUI();
         });
-        
-        onValue(ref(db, `warehouse/inward/${todayDateStr}`), (snapshot) => {
+
+        onValue(ref(db, 'warehouse/inward'), (snapshot) => {
             const val = snapshot.val();
+            cleanUpOldDates(val, 'inward');
             firebaseData.inward = flattenFirebaseData(val);
             updateUI();
         });
@@ -275,18 +282,27 @@
         function detectCourier(awb) {
             const cleanAwb = awb.replace(/(NYK|AJI|LI)$/, '');
             const len = cleanAwb.length;
-            
+
             if (/[A-Z]/.test(cleanAwb)) {
-                if (cleanAwb.startsWith('SF') || cleanAwb.startsWith('MYSFXHL')) return { name: 'Shadowfax', class: 'badge-shadowfax' };
+                // Route EMS Speed Post (AM...IN) to ATS
+                if (/^[A-Z]{2}\d{9}IN$/.test(cleanAwb)) return { name: 'ATS', class: 'badge-ats' };
+                
+                // Route Wishlink Ekart (SRSC... or SRSP...)
+                if (cleanAwb.startsWith('SRSC') || cleanAwb.startsWith('SRSP')) return { name: 'E-Kart (Wishlink)', class: 'badge-flipkart' };
+                // Route Wishlink Ekart (SRSC...)
+                if (cleanAwb.startsWith('SRSC')) return { name: 'E-Kart (Wishlink)', class: 'badge-flipkart' };
+
+                if (cleanAwb.startsWith('SF') && !cleanAwb.startsWith('MYSF')) return { name: 'Shadowfax', class: 'badge-shadowfax' };
+                if (cleanAwb.startsWith('MYSF')) return { name: 'Myntra Shadowfax', class: 'badge-myntra-shadowfax' };
                 if (cleanAwb.startsWith('VL')) return { name: 'Valmo', class: 'badge-valmo' };
                 if (cleanAwb.startsWith('MH')) return { name: 'ElasticRun', class: 'badge-elasticrun' };
                 if (cleanAwb.startsWith('GS')) return { name: 'ShipRocket', class: 'badge-shiprocket' };
-                if (cleanAwb.startsWith('MY')) return { name: 'Myntra Logistics', class: 'badge-myntra' }; 
+                if (cleanAwb.startsWith('MY') && !cleanAwb.startsWith('MYSF')) return { name: 'Myntra Logistics', class: 'badge-myntra' }; 
                 if (cleanAwb.startsWith('CLQ')) return { name: 'E-Kart (TataCliq)', class: 'badge-flipkart' };
                 if (cleanAwb.startsWith('NK')) return { name: 'E-Kart (Nykaa)', class: 'badge-flipkart' };
                 if (cleanAwb.startsWith('LM')) return { name: 'E-Kart (LimeRoad)', class: 'badge-flipkart' }; 
                 if (cleanAwb.startsWith('FMP')) return { name: 'Flipkart / E-Kart', class: 'badge-flipkart' }; 
-                
+
             } else if (/^\d+$/.test(cleanAwb)) {
                 if (len === 11) return { name: 'BlueDart', class: 'badge-bluedart' };
                 if (len === 12) return { name: 'ATS', class: 'badge-ats' }; 
@@ -303,7 +319,7 @@
         function verifyMarketplaceMatch(awb, marketplace) {
             const courierObj = detectCourier(awb);
             const courierName = courierObj.name;
-            
+
             if (courierName === 'BlueDart' && ['Meesho', 'Flipkart', 'Myntra', 'Amazon'].includes(marketplace)) return false;
             if (courierName === 'Valmo' && marketplace !== 'Meesho') return false;
             if (courierName === 'Delhivery' && ['Flipkart', 'Myntra', 'Amazon'].includes(marketplace)) return false;
@@ -311,18 +327,33 @@
             if (courierName === 'Shadowfax' && ['Amazon', 'Flipkart'].includes(marketplace)) return false;
             if (courierName === 'ElasticRun' && marketplace !== 'Meesho') return false;
             if (courierName === 'ATS' && marketplace !== 'Amazon') return false;
+            if (courierName === 'Myntra Shadowfax' && marketplace !== 'Myntra') return false;
+            if (courierName === 'E-Kart (Wishlink)' && marketplace !== 'Wishlink') return false;
 
-            const isMyntraSig = awb.startsWith('MY') && !awb.startsWith('MYSFXHL');
-            const isFlipkartSig = awb.startsWith('FMP'); 
+            // Strict Signatures
+            const isMyntraSig = awb.startsWith('MY'); // Covers MY and MYSF
+            const isFlipkartSig = awb.startsWith('FMP'); // STRICT FMP ONLY
             const isValmoSig = awb.startsWith('VL');
-            const isAmazonSig = /^\d{12,16}$/.test(awb);
 
+            // Support for both SRSC and SRSP for Wishlink Ekart
+            const isWishlinkSig = awb.startsWith('SRSC') || awb.startsWith('SRSP');
+            // Fix: Keep isWishlinkSig strictly for Wishlink Ekart prefixes so it doesn't break Xpressbees/Delhivery on other channels
+            const isWishlinkSig = awb.startsWith('SRSC');
+
+            const isAmazonSig = /^\d{12,16}$/.test(awb) \vert{}\vert{} /^[A-Z]{2}\d{9}IN$/.test(awb);
+            const isAmazonSig = /^\d{12,16}$/.test(awb) || /^[A-Z]{2}\d{9}IN$/.test(awb);
+
+            // Error Checking Rules
+            // Galti pakadne ke rules
             if (marketplace === 'Flipkart' && !isFlipkartSig) return false;
             if (marketplace === 'Myntra' && !isMyntraSig) return false;
-            
-            if (marketplace === 'Meesho' && (isFlipkartSig || isMyntraSig || isAmazonSig)) return false;
+            if (marketplace === 'Meesho' && (isFlipkartSig || isMyntraSig || isWishlinkSig)) return false; // Allows numeric awbs
             if (marketplace === 'Amazon' && !isAmazonSig) return false;
-            
+
+            // Wishlink validates if it has the SRSC/SRSP signature OR if it is one of the shared couriers
+            // Fix: Wishlink validates if it has the SRSC signature OR if it is one of the shared couriers
+            if (marketplace === 'Wishlink' && !isWishlinkSig && !['Xpressbees', 'BlueDart', 'Shadowfax', 'Delhivery'].includes(courierName)) return false;
+
             return true;
         }
 
@@ -333,6 +364,13 @@
 
                 let awb = this.value.toUpperCase().split('|')[0].replace(/[^A-Z0-9]/g, "").trim();
                 if (awb === '') return;
+
+                // === MINIMUM LENGTH CHECK ===
+                if (awb.length < 7) {
+                    playSound('error');
+                    showMessage(`❌ INVALID BARCODE: AWB must be at least 7 characters long.`, 'text-red-600 bg-red-100 px-3 py-1 rounded');
+                    this.value = ''; this.focus(); return;
+                }
                 
                 if (awb.startsWith('SWLOMS') || awb.startsWith('MPP') || awb.startsWith('EPTS')) {
                     playSound('error');
@@ -348,24 +386,33 @@
                     if (awb.startsWith('AJI') || awb.endsWith('AJI')) sellerSelect.value = 'Ajio';
                     else if (awb.startsWith('LM') || awb.endsWith('LI')) sellerSelect.value = 'LimeRoad';
                     else if (awb.startsWith('NK') || awb.endsWith('NYK')) sellerSelect.value = 'Nykaa';
-                    else if (courierInfo.name === 'Myntra Logistics') sellerSelect.value = 'Myntra';
+                    else if (courierInfo.name === 'Myntra Logistics' || courierInfo.name === 'Myntra Shadowfax') sellerSelect.value = 'Myntra';
                     else if (courierInfo.name.includes('TataCliq')) sellerSelect.value = 'TataCliq';
                     else if (courierInfo.name.includes('Nykaa')) sellerSelect.value = 'Nykaa';
+                    else if (courierInfo.name === 'E-Kart (Wishlink)' || awb.startsWith('SRSC') || awb.startsWith('SRSP')) sellerSelect.value = 'Wishlink';
+                    else if (courierInfo.name === 'E-Kart (Wishlink)' || awb.startsWith('SRSC')) sellerSelect.value = 'Wishlink';
                     else if (courierInfo.name.includes('Flipkart')) sellerSelect.value = 'Flipkart';
                     else if (courierInfo.name === 'Valmo' || courierInfo.name === 'ElasticRun') sellerSelect.value = 'Meesho';
                     else if (courierInfo.name === 'ATS') sellerSelect.value = 'Amazon';
-                    
+
                     const finalSeller = sellerSelect.value;
 
+                    // ====== CUSTOM ERROR MESSAGES ======
                     if (!verifyMarketplaceMatch(awb, finalSeller)) {
                         playSound('error');
+
                         if (finalSeller === 'Flipkart' && !awb.startsWith('FMP')) {
                             showMessage(`❌ INVALID BARCODE: Flipkart parcel must start with 'FMP'.`, 'text-red-600 bg-red-100 px-3 py-1 rounded');
-                        } else if (finalSeller === 'Myntra' && (!awb.startsWith('MY') || awb.startsWith('MYSFXHL'))) {
+                        } else if (finalSeller === 'Myntra' && !awb.startsWith('MY')) {
                             showMessage(`❌ INVALID BARCODE: Myntra parcel must start with 'MY'.`, 'text-red-600 bg-red-100 px-3 py-1 rounded');
+                        } else if (finalSeller === 'Wishlink' && !awb.startsWith('SRSC') && !awb.startsWith('SRSP') && !['Xpressbees', 'BlueDart', 'Shadowfax', 'Delhivery'].includes(courierInfo.name)) {
+                            showMessage(`❌ INVALID BARCODE: Wishlink parcel must start with 'SRSC' or 'SRSP', or be a valid Xpressbees, BlueDart, Shadowfax, or Delhivery AWB.`, 'text-red-600 bg-red-100 px-3 py-1 rounded mb-2 inline-block');
+                        } else if (finalSeller === 'Wishlink' && !awb.startsWith('SRSC') && !['Xpressbees', 'BlueDart', 'Shadowfax', 'Delhivery'].includes(courierInfo.name)) {
+                            showMessage(`❌ INVALID BARCODE: Wishlink parcel must start with 'SRSC' or be a valid Xpressbees, BlueDart, Shadowfax, or Delhivery AWB.`, 'text-red-600 bg-red-100 px-3 py-1 rounded');
                         } else {
                             showMessage(`❌ Mismatch! This AWB format does not match ${finalSeller}.`, 'text-red-600 bg-red-100 px-3 py-1 rounded');
                         }
+
                         this.value = ''; this.focus(); return;
                     }
 
@@ -375,7 +422,6 @@
                         this.value = ''; this.focus(); return;
                     }
 
-                    // Duplicate check works for TODAY'S scans (preventing double scans in same shift)
                     const outwardMerged = getMergedData('outward');
                     const existingOutward = outwardMerged.find(i => i.awb === awb);
                     if (existingOutward) {
@@ -386,13 +432,13 @@
 
                     const inwardMerged = getMergedData('inward');
                     const inwardMatch = inwardMerged.find(item => item.awb === awb);
-                    
+
                     if (inwardMatch) {
                         pendingFirebaseWrites.add(`del_in_${awb}`);
                         updateSyncStatusUI();
                         remove(ref(db, `warehouse/inward/${inwardMatch.dateKey}/${inwardMatch.courier}/${inwardMatch.seller}/${inwardMatch.awb}`))
                             .then(() => { pendingFirebaseWrites.delete(`del_in_${awb}`); updateSyncStatusUI(); });
-                        
+
                         customMsg = `🔄 Restored to Outward & Removed from Inward: ${awb}`;
                         colorClass = 'text-blue-700 bg-blue-100 px-3 py-1 rounded';
                     }
@@ -402,10 +448,10 @@
                 } else if (currentMode === 'inward') {
                     const outwardMerged = getMergedData('outward');
                     const outwardMatch = outwardMerged.find(item => item.awb === awb);
-                    
+
                     if (!outwardMatch) {
                         playSound('error');
-                        showMessage(`❌ ERROR: AWB not found in Today's Outward. Cannot Inward.`, 'text-red-600 bg-red-100 px-3 py-1 rounded');
+                        showMessage(`❌ ERROR: AWB not found in Outward. Cannot Inward.`, 'text-red-600 bg-red-100 px-3 py-1 rounded');
                         this.value = ''; this.focus(); return;
                     }
 
@@ -418,7 +464,7 @@
                     }
 
                     const finalSeller = outwardMatch.seller;
-                    
+
                     pendingFirebaseWrites.add(`del_out_${awb}`);
                     updateSyncStatusUI();
                     remove(ref(db, `warehouse/outward/${outwardMatch.dateKey}/${outwardMatch.courier}/${outwardMatch.seller}/${outwardMatch.awb}`))
@@ -460,7 +506,7 @@
                 localStorage.setItem('wh_session_inward', sessionCountInward);
                 sessionCountEl.innerText = sessionCountInward;
             }
-            
+
             showMessage(customMsg, colorClass);
             playSound('success');
 
@@ -472,7 +518,7 @@
             updateSyncStatusUI(); 
 
             const path = `warehouse/${currentMode}/${dateKey}/${courierInfo.name}/${finalSeller}/${awb}`;
-            
+
             set(ref(db, path), newItem)
                 .then(() => {
                     pendingFirebaseWrites.delete(awb);
@@ -494,7 +540,7 @@
             const listEl = document.getElementById('scan-list');
             const showMoreBtn = document.getElementById('show-more-container');
             const dataToRender = getMergedData(currentMode);
-            
+
             document.getElementById('active-list-count').innerText = `${dataToRender.length} items`;
             listEl.innerHTML = '';
 
@@ -502,7 +548,7 @@
                 listEl.innerHTML = `
                     <div class="flex flex-col items-center justify-center h-full py-20 text-gray-400">
                         <svg class="w-16 h-16 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg>
-                        <p class="text-lg font-medium">No scans yet today.</p>
+                        <p class="text-lg font-medium">No scans yet.</p>
                         <p class="text-sm">Start scanning AWB barcodes to populate this list.</p>
                     </div>`;
                 if(showMoreBtn) showMoreBtn.classList.add('hidden');
@@ -514,11 +560,11 @@
             itemsToShow.forEach((item, index) => {
                 const li = document.createElement('li');
                 li.className = "bg-white p-4 rounded-lg shadow-sm border border-gray-200 flex justify-between items-center mb-3";
-                
+
                 const isPending = pendingFirebaseWrites.has(item.awb);
                 const syncBadge = isPending 
                     ? `<span class="text-[10px] bg-amber-100 text-amber-700 font-bold px-2 py-0.5 rounded-full ml-2 animate-pulse">⏳ Syncing</span>`
-                    : `<span class="text-[10px] bg-green-100 text-green-700 font-bold px-2 py-0.5 rounded-full ml-2">☁️ Synced</span>`;
+                    : `<span class="text-[10px] bg-green-100 text-green-700 font-bold px-2 py-0.5 rounded-full ml-2">☁ Synced</span>`;
 
                 li.innerHTML = `
                     <div class="flex items-center space-x-4">
@@ -547,7 +593,8 @@
 
         function renderStats() {
             const statsEl = document.getElementById('courier-stats');
-            const todaysItems = getMergedData(currentMode);
+            const todayKey = getLocalDateKey();
+            const todaysItems = getMergedData(currentMode).filter(i => i.dateKey === todayKey);
 
             if (todaysItems.length === 0) {
                 statsEl.innerHTML = `<p class="text-gray-400 text-sm italic">No scans today.</p>`;
@@ -556,7 +603,9 @@
 
             let counts = {
                 'Flipkart / E-Kart': { count: 0, badge: 'badge-flipkart' },
+                'E-Kart (Wishlink)': { count: 0, badge: 'badge-flipkart' },
                 'Myntra Logistics': { count: 0, badge: 'badge-myntra' },
+                'Myntra Shadowfax': { count: 0, badge: 'badge-myntra-shadowfax' },
                 'Delhivery': { count: 0, badge: 'badge-delhivery' },
                 'Xpressbees': { count: 0, badge: 'badge-xpressbees' },
                 'Shadowfax': { count: 0, badge: 'badge-shadowfax' },
@@ -574,9 +623,9 @@
             });
 
             statsEl.innerHTML = '';
-            
+
             for (const [courier, info] of Object.entries(counts)) {
-                if (info.count === 0 && !['Flipkart / E-Kart', 'Myntra Logistics', 'Delhivery', 'Xpressbees', 'Shadowfax', 'BlueDart', 'ATS'].includes(courier)) {
+                if (info.count === 0 && !['Flipkart / E-Kart', 'E-Kart (Wishlink)', 'Myntra Logistics', 'Myntra Shadowfax', 'Delhivery', 'Xpressbees', 'Shadowfax', 'BlueDart', 'ATS'].includes(courier)) {
                     continue; 
                 }
                 statsEl.innerHTML += `
@@ -607,8 +656,9 @@
         }
 
         function updateGlobalCounts() {
-            document.getElementById('outward-count').innerText = getMergedData('outward').length;
-            document.getElementById('inward-count').innerText = getMergedData('inward').length;
+            const todayKey = getLocalDateKey();
+            document.getElementById('outward-count').innerText = getMergedData('outward').filter(i => i.dateKey === todayKey).length;
+            document.getElementById('inward-count').innerText = getMergedData('inward').filter(i => i.dateKey === todayKey).length;
         }
 
         function showMessage(msg, colorClass) {
@@ -670,115 +720,50 @@
             }
         };
 
-        // FIX 3: Trigger lookup only on "Enter" to save DB read bandwidth
-        document.getElementById('lookup-awb-input').addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
-                handleAWBLookup(this.value.trim().toUpperCase());
-            }
-        });
-
-        async function handleAWBLookup(query) {
-            const card = document.getElementById('lookup-result-card'); 
-            const content = document.getElementById('lookup-result-content');
-            
+        window.handleAWBLookup = () => {
+            const query = document.getElementById('lookup-awb-input').value.trim().toUpperCase();
+            const card = document.getElementById('lookup-result-card'); const content = document.getElementById('lookup-result-content');
             if (!query) { card.classList.add('hidden'); return; }
+            let foundIn = null, record = null;
+            let matchOut = getMergedData('outward').find(item => item.awb === query);
 
-            content.innerHTML = `<p class="text-blue-600 font-bold animate-pulse">⏳ Searching database...</p>`;
+            if (matchOut) { foundIn = "OUTWARD (Handover)"; record = matchOut; } 
+            else {
+                let matchIn = getMergedData('inward').find(item => item.awb === query);
+                if (matchIn) { foundIn = "INWARD (Returns)"; record = matchIn; }
+            }
+
             card.classList.remove('hidden');
-            
-            try {
-                let foundIn = null, record = null;
-                
-                // Fast Local Check for Today
-                let matchOut = getMergedData('outward').find(item => item.awb === query);
-                if (matchOut) { foundIn = "OUTWARD (Today)"; record = matchOut; } 
-                else {
-                    let matchIn = getMergedData('inward').find(item => item.awb === query);
-                    if (matchIn) { foundIn = "INWARD (Today)"; record = matchIn; }
-                }
-
-                // Deep Server Search if not scanned today
-                if(!record) {
-                    const snapOut = await get(ref(db, 'warehouse/outward'));
-                    const allOut = flattenFirebaseData(snapOut.val());
-                    matchOut = allOut.find(item => item.awb === query);
-                    
-                    if (matchOut) { foundIn = "OUTWARD (History)"; record = matchOut; }
-                    else {
-                        const snapIn = await get(ref(db, 'warehouse/inward'));
-                        const allIn = flattenFirebaseData(snapIn.val());
-                        let matchIn = allIn.find(item => item.awb === query);
-                        if (matchIn) { foundIn = "INWARD (History)"; record = matchIn; }
-                    }
-                }
-
-                if (record) {
-                    content.innerHTML = `<p><strong>Status:</strong> <span class="text-green-600 font-bold">Found in ${foundIn}</span></p><p><strong>AWB Number:</strong> <span class="font-mono font-bold">${record.awb}</span></p><p><strong>Channel/Seller:</strong> ${record.seller}</p><p><strong>Courier:</strong> ${record.courier}</p><p><strong>Date & Time:</strong> ${record.date} at ${record.time}</p>`;
-                } else {
-                    content.innerHTML = `<p class="text-red-500 font-semibold">❌ AWB "${query}" not found in database.</p>`;
-                }
-            } catch (error) {
-                console.error(error);
-                content.innerHTML = `<p class="text-red-500 font-semibold">❌ Network error while searching.</p>`;
+            if (record) {
+                content.innerHTML = `<p><strong>Status:</strong> <span class="text-green-600 font-bold">Found in ${foundIn}</span></p><p><strong>AWB Number:</strong> <span class="font-mono font-bold">${record.awb}</span></p><p><strong>Channel/Seller:</strong> ${record.seller}</p><p><strong>Courier:</strong> ${record.courier}</p><p><strong>Date & Time:</strong> ${record.date} at ${record.time}</p>`;
+            } else {
+                content.innerHTML = `<p class="text-red-500 font-semibold">❌ AWB "${query}" not found in database.</p>`;
             }
         };
 
-        window.exportCSV = () => {
-            // Updated to just download today's local array directly
-            let filtered = getMergedData(currentMode);
-            if (filtered.length === 0) { alert('No records to export.'); return; }
-            let csv = "Serial Number,Date,Channel,Courier,AWB,Time\n";
-            filtered.forEach((i, idx) => { csv += `${filtered.length - idx},${i.date},${i.seller || 'N/A'},${i.courier},'${i.awb},${i.time}\n`; });
-            const link = document.createElement("a"); 
-            link.setAttribute("href", encodeURI("data:text/csv;charset=utf-8," + csv)); 
-            link.setAttribute("download", `warehouse_${currentMode}_${getLocalDateKey()}.csv`); 
-            document.body.appendChild(link); link.click(); document.body.removeChild(link);
-        };
-        
-        // FIX 2: Download Report using 'get()' on-demand instead of live listener
-        window.downloadDateRangeReport = async (mode, btnElement) => {
+        window.exportCSV = () => window.downloadDateRangeReport(currentMode);
+
+        window.downloadDateRangeReport = (mode) => {
             const sDate = document.getElementById('filter-start-date').value; 
             const eDate = document.getElementById('filter-end-date').value;
-            
-            if (!sDate || !eDate) { alert('Select start and end dates first.'); return; }
-
-            const originalBtnText = btnElement.innerText;
-            btnElement.innerText = "⏳ Downloading...";
-            btnElement.disabled = true;
-
-            try {
-                // Fetch data only when clicked
-                const snapshot = await get(ref(db, `warehouse/${mode}`));
-                const allData = flattenFirebaseData(snapshot.val());
-
-                const start = new Date(sDate); 
-                const end = new Date(eDate); end.setHours(23, 59, 59);
-                
-                let filtered = allData.filter(i => { 
-                    let idt = new Date(i.dateKey); 
-                    return idt >= start && idt <= end; 
-                });
-
-                if (filtered.length === 0) { alert('No records found for the selected date range.'); return; }
-
-                let csv = "Serial Number,Date,Channel,Courier,AWB,Time\n";
-                filtered.forEach((i, idx) => {
-                    csv += `${filtered.length - idx},${i.date},${i.seller || 'N/A'},${i.courier},'${i.awb},${i.time}\n`;
-                    if (mode === 'inward' && (idx + 1) % 20 === 0 && (idx + 1) !== filtered.length) csv += ",,,,,\n"; 
-                });
-                
-                const link = document.createElement("a"); 
-                link.setAttribute("href", encodeURI("data:text/csv;charset=utf-8," + csv)); 
-                link.setAttribute("download", `warehouse_report_${mode}_CustomRange.csv`); 
-                document.body.appendChild(link); link.click(); document.body.removeChild(link);
-                
-            } catch (err) {
-                console.error(err);
-                alert("Failed to fetch report from database.");
-            } finally {
-                btnElement.innerText = originalBtnText;
-                btnElement.disabled = false;
+            let filtered = getMergedData(mode);
+            if (sDate && eDate) {
+                const start = new Date(sDate); const end = new Date(eDate); end.setHours(23, 59, 59);
+                filtered = filtered.filter(i => { let idt = new Date(i.dateKey); return idt >= start && idt <= end; });
             }
+            if (filtered.length === 0) { alert('No records found for the selected date range.'); return; }
+
+            let csv = "Serial Number,Date,Channel,Courier,AWB,Time\n";
+            filtered.forEach((i, idx) => {
+                csv += `${filtered.length - idx},${i.date},${i.seller || 'N/A'},${i.courier},'${i.awb},${i.time}\n`;
+                if (mode === 'inward' && (idx + 1) % 20 === 0 && (idx + 1) !== filtered.length) csv += ",,,,,\n"; 
+            });
+            const link = document.createElement("a"); 
+            link.setAttribute("href", encodeURI("data:text/csv;charset=utf-8," + csv)); 
+            link.setAttribute("download", `warehouse_report_${mode}_${getLocalDateKey()}.csv`); 
+            document.body.appendChild(link); 
+            link.click(); 
+            document.body.removeChild(link);
         };
 
         window.onload = () => { 

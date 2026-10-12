@@ -41,23 +41,13 @@
         .badge-buffer { background-color: #9ca3af; color: #ffffff; }
 
         /* =========================================
-           PROFESSIONAL MOTION & ANIMATION SYSTEM 
+           LIGHTWEIGHT MOTION SYSTEM (NO AUDIO LAG)
            ========================================= */
-        
-        /* 1. Waterfall List Entrance */
-        @keyframes slideInUp {
-            from { opacity: 0; transform: translateY(30px) scale(0.98); }
-            to { opacity: 1; transform: translateY(0) scale(1); }
-        }
-        .stagger-item {
-            opacity: 0;
-            animation: slideInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-        }
 
-        /* 2. Seamless Fold/Collapse for Dropdown */
+        /* Seamless Fold/Collapse for Dropdown */
         .smooth-fold {
-            transition: max-height 0.6s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.4s ease-out, margin 0.4s ease-out;
-            max-height: 150px; /* Adjust based on content */
+            transition: max-height 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease-out, margin 0.3s ease-out;
+            max-height: 150px; 
             opacity: 1;
             overflow: hidden;
         }
@@ -67,47 +57,47 @@
             margin-bottom: 0 !important;
         }
 
-        /* 3. Pop Feedback for Actions */
+        /* Pop Feedback for Actions */
         @keyframes popScale {
             0% { transform: scale(1); }
-            50% { transform: scale(1.08); }
+            50% { transform: scale(1.05); }
             100% { transform: scale(1); }
         }
         .animate-pop {
-            animation: popScale 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            animation: popScale 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
         }
 
-        /* 4. Scanner Success Pulse */
+        /* Scanner Success Pulse */
         @keyframes scanGlow {
-            0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.5); }
-            70% { box-shadow: 0 0 0 15px rgba(34, 197, 94, 0); }
+            0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4); }
+            70% { box-shadow: 0 0 0 10px rgba(34, 197, 94, 0); }
             100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
         }
         .scan-success-pulse {
-            animation: scanGlow 0.6s ease-out forwards;
+            animation: scanGlow 0.4s ease-out forwards;
             border-color: #22c55e !important;
         }
 
-        /* 5. Dashboard View Switch Fade */
+        /* Dashboard View Switch Fade */
         @keyframes subtleFadeIn {
-            from { opacity: 0; transform: translateY(10px); }
+            from { opacity: 0; transform: translateY(5px); }
             to { opacity: 1; transform: translateY(0); }
         }
         .view-transition {
-            animation: subtleFadeIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            animation: subtleFadeIn 0.3s ease-out forwards;
         }
     </style>
 </head>
-<body class="mode-outward min-h-screen flex flex-col transition-colors duration-1000 ease-in-out">
+<body class="mode-outward min-h-screen flex flex-col transition-colors duration-500 ease-in-out">
 
     <!-- Header -->
-    <header class="theme-bg text-white shadow-md transition-colors duration-1000 ease-in-out">
+    <header class="theme-bg text-white shadow-md transition-colors duration-500 ease-in-out">
         <div class="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8 flex justify-between items-center">
             <h1 class="text-2xl font-bold tracking-tight">Berrylicious Clothing</h1>
             <div class="flex items-center space-x-3">
                 <button onclick="switchView('scanner')" id="nav-scanner-btn" class="bg-white text-gray-800 text-sm font-bold px-4 py-2 rounded-lg shadow-sm transition-all duration-300 transform active:scale-95">📦 Scanner</button>
                 <button onclick="switchView('reports')" id="nav-reports-btn" class="bg-white/25 hover:bg-white/30 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-all duration-300 transform active:scale-95">📊 Reports & Search</button>
-                <span id="sync-status" class="text-xs bg-green-500 text-white font-bold px-2.5 py-1 rounded-full transition-all duration-300">☁️ Connected</span>
+                <span id="sync-status" class="text-xs bg-green-500 text-white font-bold px-2.5 py-1 rounded-full">☁️ Connected</span>
                 <div class="hidden md:flex space-x-3 text-sm font-medium">
                     <span class="bg-white/20 px-3 py-1 rounded-full">Today Outward: <span id="outward-count" class="font-bold">0</span></span>
                     <span class="bg-white/20 px-3 py-1 rounded-full">Today Inward: <span id="inward-count" class="font-bold">0</span></span>
@@ -125,20 +115,20 @@
             <!-- Operation Mode Selector -->
             <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden relative">
                 <div class="flex w-full relative z-10">
-                    <button id="btn-outward" onclick="setMode('outward')" class="flex-1 py-4 text-center font-bold text-lg transition-all duration-500 border-b-4 border-orange-500 bg-orange-50 text-orange-700">
+                    <button id="btn-outward" onclick="setMode('outward')" class="flex-1 py-4 text-center font-bold text-lg transition-all duration-300 border-b-4 border-orange-500 bg-orange-50 text-orange-700">
                         📦 OUTWARD
                     </button>
-                    <button id="btn-inward" onclick="setMode('inward')" class="flex-1 py-4 text-center font-bold text-lg transition-all duration-500 border-b-4 border-transparent text-gray-500 hover:bg-gray-50">
+                    <button id="btn-inward" onclick="setMode('inward')" class="flex-1 py-4 text-center font-bold text-lg transition-all duration-300 border-b-4 border-transparent text-gray-500 hover:bg-gray-50">
                         📥 INWARD
                     </button>
                 </div>
             </div>
 
             <!-- Active Session Counter -->
-            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 flex justify-between items-center transition-all duration-500 group hover:shadow-md">
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 flex justify-between items-center transition-all duration-300 group hover:shadow-md">
                 <div>
                     <span class="text-xs font-bold text-gray-500 uppercase tracking-wider">Session Counter</span>
-                    <div class="text-3xl font-black text-gray-800 transition-all duration-300 inline-block" id="session-count">0</div>
+                    <div class="text-3xl font-black text-gray-800 inline-block" id="session-count">0</div>
                 </div>
                 <button onclick="resetSessionCount()" class="bg-gray-100 hover:bg-red-50 text-gray-600 hover:text-red-600 text-xs font-bold px-3 py-2 rounded-lg border border-gray-200 transition-all duration-300 transform active:scale-95">
                     🔄 Reset Session
@@ -146,7 +136,7 @@
             </div>
 
             <!-- Core Scanner Input Area -->
-            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 theme-accent transition-colors duration-1000 ease-in-out">
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 theme-accent transition-colors duration-500 ease-in-out">
                 
                 <!-- Seamless Dropdown Container -->
                 <div id="seller-container" class="smooth-fold mb-5">
@@ -178,7 +168,6 @@
             <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                 <h3 class="text-sm font-semibold text-gray-700 mb-4 uppercase tracking-wider flex items-center">
                     Today's Courier Breakdown
-                    <span class="ml-2 w-2 h-2 rounded-full theme-bg animate-pulse"></span>
                 </h3>
                 <div id="courier-stats" class="space-y-2"></div>
             </div>
@@ -191,16 +180,15 @@
 
         <!-- Right Column: Scan Event History -->
         <div class="lg:col-span-2 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col h-[800px] overflow-hidden">
-            <div class="p-6 border-b border-gray-100 flex justify-between items-center theme-accent transition-colors duration-1000 ease-in-out relative z-10 shadow-sm">
+            <div class="p-6 border-b border-gray-100 flex justify-between items-center theme-accent transition-colors duration-500 ease-in-out relative z-10 shadow-sm">
                 <h2 class="text-xl font-bold text-gray-800 flex items-center gap-2">
                     Operational History: 
-                    <span id="current-mode-label" class="theme-text transition-colors duration-1000">OUTWARD</span>
+                    <span id="current-mode-label" class="theme-text transition-colors duration-500">OUTWARD</span>
                 </h2>
                 <span id="active-list-count" class="bg-gray-800 text-white text-xs font-bold px-3 py-1 rounded-full shadow-sm transition-all duration-300">0 items</span>
             </div>
             
             <div class="flex-grow overflow-y-auto p-4 bg-gray-50/50 flex flex-col relative">
-                <!-- List Container for Staggered Items -->
                 <ul id="scan-list" class="space-y-3 pb-4"></ul>
                 
                 <!-- Pagination Control -->
@@ -315,6 +303,7 @@
             if (savedDataStr) {
                 try {
                     const savedData = JSON.parse(savedDataStr);
+                    // Retain settings if date matches, otherwise auto-reset for the next day
                     if (savedData.date === todayStr) {
                         courierToggleState = { ...courierToggleState, ...savedData.states };
                     } else {
@@ -326,6 +315,7 @@
 
         window.toggleCourier = function(courierName, isEnabled) {
             courierToggleState[courierName] = isEnabled;
+            
             const todayStr = getLocalDateKey();
             localStorage.setItem('wh_courier_toggles_v3', JSON.stringify({
                 date: todayStr,
@@ -345,7 +335,7 @@
                 arrow.style.transform = 'rotate(180deg)';
                 // Trigger a tiny reflow trick to animate height if needed
                 el.style.opacity = '0';
-                setTimeout(() => { el.style.opacity = '1'; el.style.transition = 'opacity 0.3s ease'; }, 10);
+                setTimeout(() => { el.style.opacity = '1'; el.style.transition = 'opacity 0.2s ease'; }, 10);
             } else {
                 el.classList.add('hidden');
                 arrow.style.transform = 'rotate(0deg)';
@@ -457,6 +447,7 @@
             if (courierName === 'Shadowfax' && ['Amazon', 'Flipkart'].includes(marketplace)) return false;
             if (courierName === 'ElasticRun' && marketplace !== 'Meesho') return false;
             
+            // Allow ATS strictly for Amazon and Wishlink operations
             if (courierName === 'ATS' && !['Amazon', 'Wishlink'].includes(marketplace)) return false;
 
             const isMyntraSig = awb.startsWith('MY');
@@ -481,7 +472,7 @@
                 let awb = this.value.toUpperCase().split('|')[0].replace(/[^A-Z0-9]/g, "").trim();
                 if (awb === '') return;
                 
-                // Exclude invalid patterns
+                // Exclude common invalid patterns, packaging barcodes, routing codes, and insufficient lengths
                 if (awb.startsWith('SWLOMS') || awb.startsWith('MPP') || awb.startsWith('EPTS') || 
                     awb.startsWith('ANNAP') || awb.startsWith('E8') || awb.startsWith('B3') || 
                     awb.startsWith('M6A') || awb.length < 8) {
@@ -501,7 +492,7 @@
                     
                     let parentCourier = getParentCourier(courierInfo.name);
 
-                    // Block operation if dispatch is off
+                    // Block operation if the parent courier dispatch is toggled off
                     if (courierToggleState[parentCourier] === false) {
                         playSound('error');
                         showMessage(`❌ OPERATION HALTED: Dispatch for ${parentCourier} is currently marked as closed.`, 'text-white bg-red-600 px-3 py-1 rounded shadow-md');
@@ -510,7 +501,7 @@
                         return;
                     }
 
-                    // Auto-detect and route
+                    // Auto-detect and route specific marketplaces based on AWB signature
                     if (awb.startsWith('AJI') || awb.endsWith('AJI')) sellerSelect.value = 'Ajio';
                     else if (awb.startsWith('LM') || awb.endsWith('LI')) sellerSelect.value = 'LimeRoad';
                     else if (awb.startsWith('NK') || awb.endsWith('NYK')) sellerSelect.value = 'Nykaa';
@@ -519,6 +510,7 @@
                     else if (courierInfo.name.includes('Nykaa')) sellerSelect.value = 'Nykaa';
                     else if (courierInfo.name.includes('Flipkart')) sellerSelect.value = 'Flipkart';
                     else if (courierInfo.name === 'Valmo' || courierInfo.name === 'ElasticRun') sellerSelect.value = 'Meesho';
+                    // Route ATS to Amazon if Wishlink is not currently targeted
                     else if (courierInfo.name === 'ATS' && sellerSelect.value !== 'Wishlink') sellerSelect.value = 'Amazon';
                     
                     const finalSeller = sellerSelect.value;
@@ -551,7 +543,7 @@
                         this.value = ''; this.focus(); return; 
                     }
 
-                    // Handover & Re-routing logic
+                    // Handover & Re-routing logic from Inward back to Outward
                     const inwardMerged = getMergedData('inward');
                     const inwardMatch = inwardMerged.find(item => item.awb === awb);
                     
@@ -621,7 +613,7 @@
                 badgeClass: courierInfo.class
             };
 
-            // Trigger Pop Animations
+            // Trigger Pop Animations on counters
             sessionCountEl.classList.remove('animate-pop');
             void sessionCountEl.offsetWidth; // Trigger reflow
             sessionCountEl.classList.add('animate-pop');
@@ -629,7 +621,6 @@
             awbInput.classList.remove('scan-success-pulse');
             void awbInput.offsetWidth;
             awbInput.classList.add('scan-success-pulse');
-            setTimeout(() => awbInput.classList.remove('scan-success-pulse'), 600);
 
             if (currentMode === 'outward') {
                 sessionCountOutward++;
@@ -674,7 +665,6 @@
             const showMoreBtn = document.getElementById('show-more-container');
             const dataToRender = getMergedData(currentMode);
             
-            // Pop the counter slightly on load
             const listCountBtn = document.getElementById('active-list-count');
             listCountBtn.innerText = `${dataToRender.length} items`;
             listCountBtn.classList.remove('animate-pop');
@@ -685,7 +675,7 @@
 
             if (dataToRender.length === 0) {
                 listEl.innerHTML = `
-                    <div class="flex flex-col items-center justify-center h-full py-20 text-gray-400 stagger-item">
+                    <div class="flex flex-col items-center justify-center h-full py-20 text-gray-400">
                         <svg class="w-16 h-16 mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg>
                         <p class="text-lg font-medium text-gray-500">No records found for the current session.</p>
                         <p class="text-sm">Initiate scanning to populate the operational history.</p>
@@ -698,10 +688,11 @@
 
             itemsToShow.forEach((item, index) => {
                 const li = document.createElement('li');
-                // Added waterfall stagger effect class, cap delay at 0.5s so long lists don't take forever
-                const delay = Math.min(index * 0.04, 0.5); 
-                li.className = "bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex justify-between items-center mb-3 stagger-item hover:shadow-md transition-shadow duration-300";
-                li.style.animationDelay = `${delay}s`;
+                
+                // LIGHTWEIGHT ANIMATION: Naye scan par sirf list ke pehle item ko Pop effect milega
+                // Baki list bina animation ke load hogi, taaki browser speed perfect rahe.
+                const isNewest = (index === 0);
+                li.className = `bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex justify-between items-center mb-3 hover:shadow-md transition-shadow duration-300 ${isNewest ? 'animate-pop' : ''}`;
                 
                 const isPending = pendingFirebaseWrites.has(item.awb);
                 const syncBadge = isPending 
@@ -861,28 +852,52 @@
             scanMessage.className = `mt-3 text-sm font-bold h-auto ${colorClass} inline-block transform transition-all duration-300 animate-pop shadow-sm`;
         }
 
+        // Auditory Feedback Engine
+        let globalAudioCtx = null; 
+        function playSound(type) {
+            if (!globalAudioCtx) globalAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            if (globalAudioCtx.state === 'suspended') globalAudioCtx.resume();
+
+            const osc = globalAudioCtx.createOscillator();
+            const gain = globalAudioCtx.createGain();
+            osc.connect(gain); gain.connect(globalAudioCtx.destination);
+
+            if (type === 'success') {
+                osc.type = 'sine'; osc.frequency.setValueAtTime(800, globalAudioCtx.currentTime); osc.frequency.exponentialRampToValueAtTime(1200, globalAudioCtx.currentTime + 0.1);
+                gain.gain.setValueAtTime(0.1, globalAudioCtx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, globalAudioCtx.currentTime + 0.1);
+                osc.start(globalAudioCtx.currentTime); osc.stop(globalAudioCtx.currentTime + 0.2);
+            } else if (type === 'duplicate') {
+                osc.type = 'square'; osc.frequency.setValueAtTime(350, globalAudioCtx.currentTime); osc.frequency.setValueAtTime(250, globalAudioCtx.currentTime + 0.15);
+                gain.gain.setValueAtTime(0.5, globalAudioCtx.currentTime); gain.gain.setValueAtTime(0.01, globalAudioCtx.currentTime + 0.1); gain.gain.setValueAtTime(0.5, globalAudioCtx.currentTime + 0.15); gain.gain.exponentialRampToValueAtTime(0.01, globalAudioCtx.currentTime + 0.35);
+                osc.start(globalAudioCtx.currentTime); osc.stop(globalAudioCtx.currentTime + 0.35);
+            } else {
+                osc.type = 'sawtooth'; osc.frequency.setValueAtTime(260, globalAudioCtx.currentTime); osc.frequency.setValueAtTime(140, globalAudioCtx.currentTime + 0.15);
+                gain.gain.setValueAtTime(0.6, globalAudioCtx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, globalAudioCtx.currentTime + 0.3);
+                osc.start(globalAudioCtx.currentTime); osc.stop(globalAudioCtx.currentTime + 0.3);
+            }
+        }
+
         // Context Switching & Professional UI Navigation
         window.setMode = (mode) => {
             currentMode = mode; currentDisplayLimit = 100; 
             
             // Retain the smooth transition class on the body
-            document.body.className = `mode-${mode} min-h-screen flex flex-col transition-colors duration-1000 ease-in-out`;
+            document.body.className = `mode-${mode} min-h-screen flex flex-col transition-colors duration-500 ease-in-out`;
             
             // Button Indicator styling
             const outBtn = document.getElementById('btn-outward');
             const inBtn = document.getElementById('btn-inward');
             
             if (mode === 'outward') {
-                outBtn.className = "flex-1 py-4 text-center font-bold text-lg transition-all duration-500 border-b-4 border-orange-500 bg-orange-50 text-orange-700";
-                inBtn.className = "flex-1 py-4 text-center font-bold text-lg transition-all duration-500 border-b-4 border-transparent text-gray-500 hover:bg-gray-50";
+                outBtn.className = "flex-1 py-4 text-center font-bold text-lg transition-all duration-300 border-b-4 border-orange-500 bg-orange-50 text-orange-700";
+                inBtn.className = "flex-1 py-4 text-center font-bold text-lg transition-all duration-300 border-b-4 border-transparent text-gray-500 hover:bg-gray-50";
             } else {
-                inBtn.className = "flex-1 py-4 text-center font-bold text-lg transition-all duration-500 border-b-4 border-blue-500 bg-blue-50 text-blue-700";
-                outBtn.className = "flex-1 py-4 text-center font-bold text-lg transition-all duration-500 border-b-4 border-transparent text-gray-500 hover:bg-gray-50";
+                inBtn.className = "flex-1 py-4 text-center font-bold text-lg transition-all duration-300 border-b-4 border-blue-500 bg-blue-50 text-blue-700";
+                outBtn.className = "flex-1 py-4 text-center font-bold text-lg transition-all duration-300 border-b-4 border-transparent text-gray-500 hover:bg-gray-50";
             }
             
             document.getElementById('current-mode-label').innerText = mode.toUpperCase();
             
-            // Motion Artist: Zero-Jerk Dropdown Collapse
             const sellerContainer = document.getElementById('seller-container');
             if(mode === 'outward') {
                 sellerContainer.classList.remove('collapsed');

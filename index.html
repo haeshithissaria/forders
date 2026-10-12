@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Berrylicious Clothing</title>
+    <title>Berrylicious Clothing - Operations Dashboard</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -689,8 +689,7 @@
             itemsToShow.forEach((item, index) => {
                 const li = document.createElement('li');
                 
-                // LIGHTWEIGHT ANIMATION: Naye scan par sirf list ke pehle item ko Pop effect milega
-                // Baki list bina animation ke load hogi, taaki browser speed perfect rahe.
+                // LIGHTWEIGHT ANIMATION: New scans get a subtle pop effect
                 const isNewest = (index === 0);
                 li.className = `bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex justify-between items-center mb-3 hover:shadow-md transition-shadow duration-300 ${isNewest ? 'animate-pop' : ''}`;
                 
@@ -852,28 +851,78 @@
             scanMessage.className = `mt-3 text-sm font-bold h-auto ${colorClass} inline-block transform transition-all duration-300 animate-pop shadow-sm`;
         }
 
-        // Auditory Feedback Engine
+        // =========================================
+        // PROFESSIONAL AUDITORY FEEDBACK ENGINE
+        // =========================================
         let globalAudioCtx = null; 
+        let audioUnlocked = false;
+
+        // Browser Security Bypass: Unlocks audio on first interaction
+        function unlockAudio() {
+            if (audioUnlocked) return;
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            globalAudioCtx = new AudioContext();
+            
+            // Play a silent micro-note to permanently unlock the audio engine
+            const osc = globalAudioCtx.createOscillator();
+            const gain = globalAudioCtx.createGain();
+            gain.gain.value = 0;
+            osc.connect(gain);
+            gain.connect(globalAudioCtx.destination);
+            osc.start(0);
+            osc.stop(0.1);
+            
+            audioUnlocked = true;
+            // Remove listeners once unlocked to save memory
+            document.removeEventListener('click', unlockAudio);
+            document.removeEventListener('keydown', unlockAudio);
+        }
+
+        // Listen for any click or keyboard press to unlock sound
+        document.addEventListener('click', unlockAudio);
+        document.addEventListener('keydown', unlockAudio);
+
         function playSound(type) {
-            if (!globalAudioCtx) globalAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            // Ensure audio is unlocked and running
+            if (!audioUnlocked) unlockAudio();
             if (globalAudioCtx.state === 'suspended') globalAudioCtx.resume();
 
             const osc = globalAudioCtx.createOscillator();
             const gain = globalAudioCtx.createGain();
-            osc.connect(gain); gain.connect(globalAudioCtx.destination);
+            osc.connect(gain); 
+            gain.connect(globalAudioCtx.destination);
 
             if (type === 'success') {
-                osc.type = 'sine'; osc.frequency.setValueAtTime(800, globalAudioCtx.currentTime); osc.frequency.exponentialRampToValueAtTime(1200, globalAudioCtx.currentTime + 0.1);
-                gain.gain.setValueAtTime(0.1, globalAudioCtx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, globalAudioCtx.currentTime + 0.1);
-                osc.start(globalAudioCtx.currentTime); osc.stop(globalAudioCtx.currentTime + 0.2);
+                // Pleasant Ascending Beep (Sine Wave)
+                osc.type = 'sine'; 
+                osc.frequency.setValueAtTime(800, globalAudioCtx.currentTime); 
+                osc.frequency.exponentialRampToValueAtTime(1200, globalAudioCtx.currentTime + 0.1);
+                gain.gain.setValueAtTime(0.2, globalAudioCtx.currentTime); 
+                gain.gain.exponentialRampToValueAtTime(0.01, globalAudioCtx.currentTime + 0.1);
+                osc.start(globalAudioCtx.currentTime); 
+                osc.stop(globalAudioCtx.currentTime + 0.2);
+                
             } else if (type === 'duplicate') {
-                osc.type = 'square'; osc.frequency.setValueAtTime(350, globalAudioCtx.currentTime); osc.frequency.setValueAtTime(250, globalAudioCtx.currentTime + 0.15);
-                gain.gain.setValueAtTime(0.5, globalAudioCtx.currentTime); gain.gain.setValueAtTime(0.01, globalAudioCtx.currentTime + 0.1); gain.gain.setValueAtTime(0.5, globalAudioCtx.currentTime + 0.15); gain.gain.exponentialRampToValueAtTime(0.01, globalAudioCtx.currentTime + 0.35);
-                osc.start(globalAudioCtx.currentTime); osc.stop(globalAudioCtx.currentTime + 0.35);
+                // Double Warning Beep (Square Wave)
+                osc.type = 'square'; 
+                osc.frequency.setValueAtTime(350, globalAudioCtx.currentTime); 
+                osc.frequency.setValueAtTime(250, globalAudioCtx.currentTime + 0.15);
+                gain.gain.setValueAtTime(0.15, globalAudioCtx.currentTime); 
+                gain.gain.setValueAtTime(0.01, globalAudioCtx.currentTime + 0.1); 
+                gain.gain.setValueAtTime(0.15, globalAudioCtx.currentTime + 0.15); 
+                gain.gain.exponentialRampToValueAtTime(0.01, globalAudioCtx.currentTime + 0.35);
+                osc.start(globalAudioCtx.currentTime); 
+                osc.stop(globalAudioCtx.currentTime + 0.35);
+                
             } else {
-                osc.type = 'sawtooth'; osc.frequency.setValueAtTime(260, globalAudioCtx.currentTime); osc.frequency.setValueAtTime(140, globalAudioCtx.currentTime + 0.15);
-                gain.gain.setValueAtTime(0.6, globalAudioCtx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, globalAudioCtx.currentTime + 0.3);
-                osc.start(globalAudioCtx.currentTime); osc.stop(globalAudioCtx.currentTime + 0.3);
+                // Harsh Error Buzzer (Sawtooth Wave)
+                osc.type = 'sawtooth'; 
+                osc.frequency.setValueAtTime(260, globalAudioCtx.currentTime); 
+                osc.frequency.setValueAtTime(140, globalAudioCtx.currentTime + 0.15);
+                gain.gain.setValueAtTime(0.25, globalAudioCtx.currentTime); 
+                gain.gain.exponentialRampToValueAtTime(0.01, globalAudioCtx.currentTime + 0.3);
+                osc.start(globalAudioCtx.currentTime); 
+                osc.stop(globalAudioCtx.currentTime + 0.3);
             }
         }
 

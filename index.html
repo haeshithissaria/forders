@@ -433,8 +433,6 @@
             const isMyntraSig = awb.startsWith('MY');
             const isFlipkartSig = awb.startsWith('FMP'); 
             const isValmoSig = awb.startsWith('VL');
-            
-            // STRICT AMAZON SIGNATURE CHECK (Does NOT overlap with Xpressbees or Delhivery numeric lengths)
             const isAmazonSig = (awb.length === 12 && /^\d+$/.test(awb)) || 
                                 ((awb.length === 14 || awb.length === 16) && (awb.startsWith('16') || awb.startsWith('37') || awb.startsWith('133'))) || 
                                 awb.startsWith('AM');
@@ -455,9 +453,10 @@
                 let awb = this.value.toUpperCase().split('|')[0].replace(/[^A-Z0-9]/g, "").trim();
                 if (awb === '') return;
                 
+                // Block Unwanted / Invalid Patterns (Added 'DA' prefix based on buffer exception logs)
                 if (awb.startsWith('SWLOMS') || awb.startsWith('MPP') || awb.startsWith('EPTS') || 
                     awb.startsWith('ANNAP') || awb.startsWith('E8') || awb.startsWith('B3') || 
-                    awb.startsWith('M6A') || awb.length < 8) {
+                    awb.startsWith('M6A') || awb.startsWith('DA') || awb.length < 8) {
                     
                     playSound('error');
                     showMessage(`❌ INVALID BARCODE: Unrecognized format or length (${awb}). Please scan a valid AWB.`, 'text-white bg-red-600 px-3 py-1 rounded shadow-md');

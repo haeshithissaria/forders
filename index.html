@@ -388,11 +388,13 @@
             updateGlobalCounts();
         }
 
+        // Updated Courier Detection (Added support for SRSC and SRSP under E-Kart / Wishlink)
         function detectCourier(awb) {
             const cleanAwb = awb.replace(/(NYK|AJI|LI)$/, '');
             const len = cleanAwb.length;
             
             if (/[A-Z]/.test(cleanAwb)) {
+                if (cleanAwb.startsWith('SRSC') || cleanAwb.startsWith('SRSP')) return { name: 'E-Kart (Wishlink)', class: 'badge-flipkart' };
                 if (cleanAwb.startsWith('AM')) return { name: 'ATS', class: 'badge-ats' };
                 if (cleanAwb.startsWith('MYSF')) return { name: 'Myntra Shadowfax', class: 'badge-myntra-shadowfax' }; 
                 if (cleanAwb.startsWith('SF')) return { name: 'Shadowfax', class: 'badge-shadowfax' };
@@ -429,17 +431,23 @@
             if (courierName === 'ElasticRun' && marketplace !== 'Meesho') return false;
             
             if (courierName === 'ATS' && !['Amazon', 'Wishlink'].includes(marketplace)) return false;
+            
+            // E-Kart Wishlink compatibility check for SRSC and SRSP
+            if (courierName.includes('Wishlink') && marketplace !== 'Wishlink') return false;
 
             const isMyntraSig = awb.startsWith('MY');
             const isFlipkartSig = awb.startsWith('FMP'); 
             const isValmoSig = awb.startsWith('VL');
+            const isEkartWishlinkSig = awb.startsWith('SRSC') || awb.startsWith('SRSP');
+            
             const isAmazonSig = (awb.length === 12 && /^\d+$/.test(awb)) || 
                                 ((awb.length === 14 || awb.length === 16) && (awb.startsWith('16') || awb.startsWith('37') || awb.startsWith('133'))) || 
                                 awb.startsWith('AM');
 
             if (marketplace === 'Flipkart' && !isFlipkartSig) return false;
             if (marketplace === 'Myntra' && !isMyntraSig) return false;
-            if (marketplace === 'Meesho' && (isFlipkartSig || isMyntraSig || isAmazonSig)) return false;
+            if (marketplace === 'Wishlink' && !isEkartWishlinkSig && courierName === 'E-Kart (Wishlink)') return false;
+            if (marketplace === 'Meesho' && (isFlipkartSig || isMyntraSig || isAmazonSig || isEkartWishlinkSig)) return false;
             if (marketplace === 'Amazon' && !isAmazonSig) return false;
             
             return true;
@@ -453,7 +461,6 @@
                 let awb = this.value.toUpperCase().split('|')[0].replace(/[^A-Z0-9]/g, "").trim();
                 if (awb === '') return;
                 
-                // Block Unwanted / Invalid Patterns (Added 'DA' prefix based on buffer exception logs)
                 if (awb.startsWith('SWLOMS') || awb.startsWith('MPP') || awb.startsWith('EPTS') || 
                     awb.startsWith('ANNAP') || awb.startsWith('E8') || awb.startsWith('B3') || 
                     awb.startsWith('M6A') || awb.startsWith('DA') || awb.length < 8) {
@@ -484,6 +491,7 @@
                     if (awb.startsWith('AJI') || awb.endsWith('AJI')) sellerSelect.value = 'Ajio';
                     else if (awb.startsWith('LM') || awb.endsWith('LI')) sellerSelect.value = 'LimeRoad';
                     else if (awb.startsWith('NK') || awb.endsWith('NYK')) sellerSelect.value = 'Nykaa';
+                    else if (awb.startsWith('SRSC') || awb.startsWith('SRSP')) sellerSelect.value = 'Wishlink';
                     else if (courierInfo.name === 'Myntra Logistics' || courierInfo.name === 'Myntra Shadowfax') sellerSelect.value = 'Myntra';
                     else if (courierInfo.name.includes('TataCliq')) sellerSelect.value = 'TataCliq';
                     else if (courierInfo.name.includes('Nykaa')) sellerSelect.value = 'Nykaa';
@@ -499,6 +507,8 @@
                             showMessage(`❌ COMPLIANCE ERROR: Flipkart shipments require an 'FMP' prefix.`, 'text-red-600 bg-red-50 border border-red-200 px-3 py-1 rounded shadow-sm');
                         } else if (finalSeller === 'Myntra' && !awb.startsWith('MY')) {
                             showMessage(`❌ COMPLIANCE ERROR: Myntra shipments require an 'MY' prefix.`, 'text-red-600 bg-red-50 border border-red-200 px-3 py-1 rounded shadow-sm');
+                        } else if (finalSeller === 'Wishlink' && !(awb.startsWith('SRSC') || awb.startsWith('SRSP') || courierInfo.name === 'ATS')) {
+                            showMessage(`❌ COMPLIANCE ERROR: Wishlink shipments require 'SRSC', 'SRSP', or ATS barcodes.`, 'text-red-600 bg-red-50 border border-red-200 px-3 py-1 rounded shadow-sm');
                         } else {
                             showMessage(`❌ ROUTING MISMATCH: The scanned barcode does not correlate with the selected marketplace (${finalSeller}).`, 'text-red-600 bg-red-50 border border-red-200 px-3 py-1 rounded shadow-sm');
                         }

@@ -550,9 +550,23 @@
                     }
 
                     if (historicalRecord) {
-                        showMessage(`❌ DUPLICATE DETECTED: Previously recorded in ${historicalRecord.mode.toUpperCase()} on ${historicalRecord.date} at ${historicalRecord.time}.`, 'text-red-600 bg-red-50 border border-red-200 px-3 py-1 rounded shadow-sm');
-                        playSound('duplicate');
-                        this.value = ''; this.focus(); return; 
+                        if (historicalRecord.mode === 'outward') {
+                            // True duplicate in Outward
+                            showMessage(`❌ DUPLICATE DETECTED: Already recorded in OUTWARD on ${historicalRecord.date} at ${historicalRecord.time}.`, 'text-red-600 bg-red-50 border border-red-200 px-3 py-1 rounded shadow-sm');
+                            playSound('duplicate');
+                            this.value = ''; this.focus(); return; 
+                        } else if (historicalRecord.mode === 'inward') {
+                            // Item was in Inward (Returned), now being Re-dispatched (Outward)
+                            pendingFirebaseWrites.add(`del_in_${awb}`);
+                            updateSyncStatusUI();
+                            
+                            // Remove from Inward database
+                            db.ref(`warehouse/inward/${historicalRecord.dateKey}/${historicalRecord.courier}/${historicalRecord.seller}/${historicalRecord.awb}`).remove()
+                                .then(() => { pendingFirebaseWrites.delete(`del_in_${awb}`); updateSyncStatusUI(); });
+
+                            customMsg = `🔄 RE-DISPATCHED: Successfully removed from Inward and moved to Outward: ${awb}`;
+                            colorClass = 'text-green-700 bg-green-100 border border-green-200 px-3 py-1 rounded shadow-sm';
+                        }
                     }
 
                     saveRecordNativeQueue(awb, finalSeller, courierInfo, customMsg, colorClass);

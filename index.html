@@ -422,7 +422,7 @@
             
             if (/[A-Z]/.test(cleanAwb)) {
                 if (cleanAwb.startsWith('SRSC') || cleanAwb.startsWith('SRSP')) return { name: 'E-Kart (Wishlink)', class: 'badge-flipkart' };
-                if (cleanAwb.startsWith('AM')) return { name: 'ATS', class: 'badge-ats' };
+                if (cleanAwb.startsWith('AM') || cleanAwb.startsWith('AC')) return { name: 'ATS', class: 'badge-ats' };
                 if (cleanAwb.startsWith('MYSF')) return { name: 'Myntra Shadowfax', class: 'badge-myntra-shadowfax' }; 
                 if (cleanAwb.startsWith('SF')) return { name: 'Shadowfax', class: 'badge-shadowfax' };
                 if (cleanAwb.startsWith('VL')) return { name: 'Valmo', class: 'badge-valmo' };
@@ -467,7 +467,7 @@
             
             const isAmazonSig = (awb.length === 12 && /^\d+$/.test(awb)) || 
                                 ((awb.length === 14 || awb.length === 16) && (awb.startsWith('16') || awb.startsWith('37') || awb.startsWith('133'))) || 
-                                awb.startsWith('AM');
+                                awb.startsWith('AM') || awb.startsWith('AC');
 
             if (marketplace === 'Flipkart' && !isFlipkartSig) return false;
             if (marketplace === 'Myntra' && !isMyntraSig) return false;

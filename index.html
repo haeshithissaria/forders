@@ -42,7 +42,7 @@
 
         .smooth-fold {
             transition: max-height 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease-out, margin 0.3s ease-out;
-            max-height: 150px; 
+            max-height: 180px; 
             opacity: 1;
             overflow: hidden;
         }
@@ -130,9 +130,20 @@
             <!-- Core Scanner Input Area -->
             <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 theme-accent transition-colors duration-500 ease-in-out">
                 
-                <div id="seller-container" class="smooth-fold mb-5">
-                    <label class="block text-sm font-semibold text-gray-700 mb-2">Active Marketplace / Channel</label>
-                    <select id="seller-select" class="w-full text-lg p-3 border-2 theme-border rounded-lg theme-glow outline-none transition-all duration-300 shadow-inner bg-white font-medium cursor-pointer">
+                <div id="seller-container" class="smooth-fold mb-5 transition-opacity duration-300">
+                    <div class="flex items-center justify-between mb-2">
+                        <label class="block text-sm font-semibold text-gray-700">Active Marketplace / Channel</label>
+                        <!-- Shiprocket Aggregator Mode Toggle (Default: OFF) -->
+                        <div class="flex items-center space-x-2">
+                            <span class="text-xs font-bold text-teal-700">Shiprocket Mode</span>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="shiprocket-mode-toggle" class="sr-only peer" onchange="toggleShiprocketMode(this.checked)">
+                                <div class="w-8 h-4 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-teal-600"></div>
+                            </label>
+                        </div>
+                    </div>
+                    <!-- Marketplace select list -->
+                    <select id="seller-select" class="w-full text-lg p-3 border-2 theme-border rounded-lg theme-glow outline-none transition-all duration-300 shadow-inner bg-white font-medium cursor-pointer focus:ring-2 focus:ring-offset-1">
                         <option value="Flipkart">Flipkart</option>
                         <option value="Myntra">Myntra</option>
                         <option value="Meesho">Meesho</option>
@@ -240,18 +251,26 @@
         let sessionCountOutward = parseInt(localStorage.getItem('wh_session_outward') || '0');
         let sessionCountInward = parseInt(localStorage.getItem('wh_session_inward') || '0');
 
+        // Toggle state: By default OFF
+        let isShiprocketModeActive = false;
+
         const awbInput = document.getElementById('awb-input');
         const scanMessage = document.getElementById('scan-message');
         const sellerSelect = document.getElementById('seller-select');
         const syncStatusEl = document.getElementById('sync-status');
         const sessionCountEl = document.getElementById('session-count');
 
-        // Global memory cache for bandwidth saving & instant duplicate check
         let globalAwbHistory = new Map();
 
         sellerSelect.addEventListener('change', function() {
             awbInput.focus();
         });
+
+        window.toggleShiprocketMode = function(isEnabled) {
+            isShiprocketModeActive = isEnabled;
+            renderStats();
+            awbInput.focus();
+        };
 
         function getLocalDateKey(dateObj = new Date()) {
             const y = dateObj.getFullYear();
@@ -279,7 +298,7 @@
             'ATS': true,
             'Valmo': true,
             'ElasticRun': true,
-            'ShipRocket': true,
+            'Shiprocket': true,
             'Buffer': true
         };
 
@@ -371,7 +390,6 @@
             }
         });
 
-        // EFFICIENT BANDWIDTH SYNC: Load full history once for duplicate checks, then listen only to today's live updates
         function initializeDatabaseSync() {
             db.ref('warehouse/outward').once('value').then(snap => {
                 const list = flattenFirebaseData(snap.val());
@@ -389,10 +407,8 @@
 
             const todayStr = getLocalDateKey();
             
-            // Live listener only for today's data to save bandwidth
             db.ref(`warehouse/outward/${todayStr}`).on('value', (snapshot) => {
                 const todayList = flattenFirebaseData(snapshot.val());
-                // Merge today's live data with older cached data
                 let olderItems = firebaseData.outward.filter(i => i.dateKey !== todayStr);
                 firebaseData.outward = [...olderItems, ...todayList];
                 todayList.forEach(i => globalAwbHistory.set(i.awb, { ...i, mode: 'outward' }));
@@ -427,7 +443,6 @@
                 if (cleanAwb.startsWith('SF')) return { name: 'Shadowfax', class: 'badge-shadowfax' };
                 if (cleanAwb.startsWith('VL')) return { name: 'Valmo', class: 'badge-valmo' };
                 if (cleanAwb.startsWith('MH')) return { name: 'ElasticRun', class: 'badge-elasticrun' };
-                if (cleanAwb.startsWith('GS')) return { name: 'ShipRocket', class: 'badge-shiprocket' };
                 if (cleanAwb.startsWith('MY')) return { name: 'Myntra Logistics', class: 'badge-myntra' }; 
                 if (cleanAwb.startsWith('CLQ')) return { name: 'E-Kart (TataCliq)', class: 'badge-flipkart' };
                 if (cleanAwb.startsWith('NK')) return { name: 'E-Kart (Nykaa)', class: 'badge-flipkart' };
@@ -447,6 +462,7 @@
         }
 
         function verifyMarketplaceMatch(awb, marketplace) {
+            // NOTE: Shiprocket exception removed. Restrictions now apply strictly to ALL scans.
             const courierObj = detectCourier(awb);
             const courierName = courierObj.name;
             
@@ -501,14 +517,13 @@
                 let customMsg = `✅ Processed: ${awb}`;
                 let colorClass = 'text-green-700 bg-green-100 border border-green-200 px-3 py-1 rounded shadow-sm';
 
-                // INSTANT DUPLICATE CHECK ACROSS ENTIRE DATABASE HISTORY FROM MEMORY
                 const historicalRecord = globalAwbHistory.get(awb);
 
                 if (currentMode === 'outward') {
                     
                     let parentCourier = getParentCourier(courierInfo.name);
 
-                    if (courierToggleState[parentCourier] === false) {
+                    if (courierToggleState[parentCourier] === false && !isShiprocketModeActive) {
                         playSound('error');
                         showMessage(`❌ OPERATION HALTED: Dispatch for ${parentCourier} is currently marked as closed.`, 'text-white bg-red-600 px-3 py-1 rounded shadow-md');
                         this.value = ''; 
@@ -516,19 +531,23 @@
                         return;
                     }
 
-                    if (awb.startsWith('AJI') || awb.endsWith('AJI')) sellerSelect.value = 'Ajio';
-                    else if (awb.startsWith('LM') || awb.endsWith('LI')) sellerSelect.value = 'LimeRoad';
-                    else if (awb.startsWith('NK') || awb.endsWith('NYK')) sellerSelect.value = 'Nykaa';
-                    else if (awb.startsWith('SRSC') || awb.startsWith('SRSP')) sellerSelect.value = 'Wishlink';
-                    else if (courierInfo.name === 'Myntra Logistics' || courierInfo.name === 'Myntra Shadowfax') sellerSelect.value = 'Myntra';
-                    else if (courierInfo.name.includes('TataCliq')) sellerSelect.value = 'TataCliq';
-                    else if (courierInfo.name.includes('Nykaa')) sellerSelect.value = 'Nykaa';
-                    else if (courierInfo.name.includes('Flipkart')) sellerSelect.value = 'Flipkart';
-                    else if (courierInfo.name === 'Valmo' || courierInfo.name === 'ElasticRun') sellerSelect.value = 'Meesho';
-                    else if (courierInfo.name === 'ATS' && sellerSelect.value !== 'Wishlink') sellerSelect.value = 'Amazon';
+                    // Auto-select channel ONLY when Shiprocket Mode is OFF
+                    if (!isShiprocketModeActive) {
+                        if (awb.startsWith('AJI') || awb.endsWith('AJI')) sellerSelect.value = 'Ajio';
+                        else if (awb.startsWith('LM') || awb.endsWith('LI')) sellerSelect.value = 'LimeRoad';
+                        else if (awb.startsWith('NK') || awb.endsWith('NYK')) sellerSelect.value = 'Nykaa';
+                        else if (awb.startsWith('SRSC') || awb.startsWith('SRSP')) sellerSelect.value = 'Wishlink';
+                        else if (courierInfo.name === 'Myntra Logistics' || courierInfo.name === 'Myntra Shadowfax') sellerSelect.value = 'Myntra';
+                        else if (courierInfo.name.includes('TataCliq')) sellerSelect.value = 'TataCliq';
+                        else if (courierInfo.name.includes('Nykaa')) sellerSelect.value = 'Nykaa';
+                        else if (courierInfo.name.includes('Flipkart')) sellerSelect.value = 'Flipkart';
+                        else if (courierInfo.name === 'Valmo' || courierInfo.name === 'ElasticRun') sellerSelect.value = 'Meesho';
+                        else if (courierInfo.name === 'ATS' && sellerSelect.value !== 'Wishlink') sellerSelect.value = 'Amazon';
+                    }
                     
                     const finalSeller = sellerSelect.value;
 
+                    // Strictly check combinations regardless of SR mode
                     if (!verifyMarketplaceMatch(awb, finalSeller)) {
                         playSound('error');
                         if (finalSeller === 'Flipkart' && !awb.startsWith('FMP')) {
@@ -543,6 +562,7 @@
                         this.value = ''; this.focus(); return;
                     }
 
+                    // Strict Amazon ATS check regardless of SR mode
                     if (finalSeller === 'Amazon' && courierInfo.name !== 'ATS') {
                         playSound('error');
                         showMessage('❌ ROUTING MISMATCH: Amazon operations exclusively accept ATS-formatted barcodes.', 'text-red-600 bg-red-50 border border-red-200 px-3 py-1 rounded shadow-sm');
@@ -551,16 +571,13 @@
 
                     if (historicalRecord) {
                         if (historicalRecord.mode === 'outward') {
-                            // True duplicate in Outward
                             showMessage(`❌ DUPLICATE DETECTED: Already recorded in OUTWARD on ${historicalRecord.date} at ${historicalRecord.time}.`, 'text-red-600 bg-red-50 border border-red-200 px-3 py-1 rounded shadow-sm');
                             playSound('duplicate');
                             this.value = ''; this.focus(); return; 
                         } else if (historicalRecord.mode === 'inward') {
-                            // Item was in Inward (Returned), now being Re-dispatched (Outward)
                             pendingFirebaseWrites.add(`del_in_${awb}`);
                             updateSyncStatusUI();
                             
-                            // Remove from Inward database
                             db.ref(`warehouse/inward/${historicalRecord.dateKey}/${historicalRecord.courier}/${historicalRecord.seller}/${historicalRecord.awb}`).remove()
                                 .then(() => { pendingFirebaseWrites.delete(`del_in_${awb}`); updateSyncStatusUI(); });
 
@@ -618,10 +635,10 @@
                 courier: courierInfo.name,
                 seller: finalSeller,
                 awb: awb,
-                badgeClass: courierInfo.class
+                badgeClass: courierInfo.class,
+                isShiprocket: isShiprocketModeActive
             };
 
-            // Update local memory cache instantly
             globalAwbHistory.set(awb, { ...newItem, mode: currentMode });
 
             sessionCountEl.classList.remove('animate-pop');
@@ -719,6 +736,7 @@
                         </div>
                     </div>
                     <div class="flex items-center">
+                        ${item.isShiprocket ? '<span class="bg-teal-50 text-teal-700 px-2 py-1 rounded-md text-[10px] font-bold mr-2 border border-teal-200 shadow-sm">🚀 SHIPROCKET</span>' : ''}
                         ${item.seller && item.seller !== 'N/A' ? `<span class="bg-gray-50 text-gray-600 px-2.5 py-1 rounded-md text-xs font-bold mr-3 border border-gray-200 shadow-sm">🛒 ${item.seller}</span>` : ''}
                         <span class="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider shadow-sm ${item.badgeClass || 'badge-buffer'}">${item.courier}</span>
                     </div>`;
@@ -754,11 +772,12 @@
                 { name: 'Delhivery', badge: 'badge-delhivery' },
                 { name: 'Xpressbees', badge: 'badge-xpressbees' },
                 { name: 'BlueDart', badge: 'badge-bluedart' },
-                { name: 'ATS', badge: 'badge-ats' }
+                { name: 'ATS', badge: 'badge-ats' },
+                { name: 'Shiprocket', badge: 'badge-shiprocket' }
             ];
 
             defaultCouriers.forEach(c => {
-                groups[c.name] = { total: 0, badge: c.badge, sellers: {} };
+                groups[c.name] = { total: 0, badge: c.badge, subBreakdown: {}, isShiprocketGroup: (c.name === 'Shiprocket') };
             });
 
             todaysItems.forEach(i => {
@@ -767,18 +786,46 @@
                     return; 
                 }
 
-                let parent = getParentCourier(i.courier);
-                if (!groups[parent]) {
-                    groups[parent] = { total: 0, badge: i.badgeClass, sellers: {} };
+                // Identify if parcel belongs to Shiprocket via the boolean flag or legacy data format
+                const isShiprocketItem = (i.isShiprocket === true || i.seller === 'Shiprocket' || i.courier === 'ShipRocket');
+
+                if (isShiprocketItem) {
+                    // SHIPROCKET 3-TIER GROUPING (Shiprocket -> Courier -> Seller)
+                    let parent = 'Shiprocket';
+                    if (!groups[parent]) {
+                        groups[parent] = { total: 0, badge: 'badge-shiprocket', subBreakdown: {}, isShiprocketGroup: true };
+                    }
+                    groups[parent].total++;
+                    
+                    let cName = getParentCourier(i.courier);
+                    if (cName === 'ShipRocket') cName = 'General';
+                    
+                    if (!groups[parent].subBreakdown[cName]) {
+                        groups[parent].subBreakdown[cName] = { total: 0, sellers: {} };
+                    }
+                    groups[parent].subBreakdown[cName].total++;
+
+                    let sName = (i.seller && i.seller !== 'Shiprocket' && i.seller !== 'N/A') ? i.seller : 'Other';
+                    if (!groups[parent].subBreakdown[cName].sellers[sName]) {
+                        groups[parent].subBreakdown[cName].sellers[sName] = 0;
+                    }
+                    groups[parent].subBreakdown[cName].sellers[sName]++;
+
+                } else {
+                    // NORMAL 2-TIER GROUPING (Parent Courier -> Seller)
+                    let parent = getParentCourier(i.courier);
+                    if (!groups[parent]) {
+                        groups[parent] = { total: 0, badge: i.badgeClass, subBreakdown: {}, isShiprocketGroup: false };
+                    }
+                    
+                    groups[parent].total++;
+                    
+                    let seller = (i.seller && i.seller !== 'N/A') ? i.seller : 'Other';
+                    if (!groups[parent].subBreakdown[seller]) {
+                        groups[parent].subBreakdown[seller] = 0;
+                    }
+                    groups[parent].subBreakdown[seller]++;
                 }
-                
-                groups[parent].total++;
-                
-                let seller = (i.seller && i.seller !== 'N/A') ? i.seller : 'Other';
-                if (!groups[parent].sellers[seller]) {
-                    groups[parent].sellers[seller] = 0;
-                }
-                groups[parent].sellers[seller]++;
             });
 
             statsEl.innerHTML = '';
@@ -790,21 +837,51 @@
                 const isChecked = courierToggleState[parentName] !== false;
                 const safeId = parentName.replace(/[^a-zA-Z0-9]/g, '-'); 
 
-                let sellersHTML = '';
-                for (const [seller, count] of Object.entries(info.sellers)) {
-                    sellersHTML += `
-                        <div class="flex justify-between text-xs text-gray-700 bg-white border border-gray-100 shadow-sm px-3 py-1.5 rounded-lg mb-1 hover:bg-gray-50 transition-colors">
-                            <span class="font-medium">🛒 ${seller}</span>
-                            <span class="font-bold bg-gray-100 text-gray-800 px-2 rounded-md">${count}</span>
-                        </div>`;
-                }
+                let subHTML = '';
 
-                if (Object.keys(info.sellers).length === 0) {
-                    sellersHTML = `<div class="text-xs text-gray-400 italic px-3 py-2 bg-gray-50 rounded-lg border border-dashed border-gray-200">No parcels processed</div>`;
+                if (info.isShiprocketGroup) {
+                    // 3-LEVEL RENDER FOR SHIPROCKET
+                    for (const [cName, cInfo] of Object.entries(info.subBreakdown)) {
+                        let sellersHTML = '';
+                        for (const [sName, count] of Object.entries(cInfo.sellers)) {
+                            sellersHTML += `
+                                <div class="flex justify-between items-center text-[11px] text-gray-600 pl-2 py-1 border-t border-gray-100 mt-1">
+                                    <span>🛒 ${sName}</span>
+                                    <span class="font-bold bg-gray-50 px-1.5 rounded text-gray-700 border border-gray-100">${count}</span>
+                                </div>`;
+                        }
+                        
+                        subHTML += `
+                            <div class="bg-gray-50 border border-gray-200 shadow-sm px-3 py-2 rounded-lg mb-2 transition-all hover:bg-gray-100">
+                                <div class="flex justify-between items-center text-xs text-gray-800 font-bold mb-1">
+                                    <span>🚚 ${cName}</span>
+                                    <span class="bg-gray-200 text-gray-900 px-2 py-0.5 rounded-md border border-gray-300 shadow-sm">${cInfo.total}</span>
+                                </div>
+                                ${sellersHTML}
+                            </div>`;
+                    }
+                    
+                    if (Object.keys(info.subBreakdown).length === 0) {
+                        subHTML = `<div class="text-xs text-gray-400 italic px-3 py-2 bg-gray-50 rounded-lg border border-dashed border-gray-200">No parcels processed</div>`;
+                    }
+
+                } else {
+                    // 2-LEVEL RENDER FOR NORMAL COURIERS
+                    for (const [subKey, count] of Object.entries(info.subBreakdown)) {
+                        subHTML += `
+                            <div class="flex justify-between text-xs text-gray-700 bg-white border border-gray-100 shadow-sm px-3 py-1.5 rounded-lg mb-1 hover:bg-gray-50 transition-colors">
+                                <span class="font-medium">🛒 ${subKey}</span>
+                                <span class="font-bold bg-gray-100 text-gray-800 px-2 rounded-md">${count}</span>
+                            </div>`;
+                    }
+
+                    if (Object.keys(info.subBreakdown).length === 0) {
+                        subHTML = `<div class="text-xs text-gray-400 italic px-3 py-2 bg-gray-50 rounded-lg border border-dashed border-gray-200">No parcels processed</div>`;
+                    }
                 }
 
                 let toggleSwitchHTML = '';
-                if (currentMode === 'outward') {
+                if (currentMode === 'outward' && parentName !== 'Shiprocket') { 
                     toggleSwitchHTML = `
                         <label class="relative inline-flex items-center cursor-pointer transform hover:scale-105 transition-transform" onclick="event.stopPropagation()">
                           <input type="checkbox" class="sr-only peer" 
@@ -829,7 +906,7 @@
                             </div>
                         </div>
                         <div id="acc-${safeId}" class="hidden pl-6 pr-1 pt-2 pb-1 transition-all duration-300">
-                            ${sellersHTML}
+                            ${subHTML}
                         </div>
                     </div>`;
             }
@@ -1029,8 +1106,11 @@
             const todayStr = getLocalDateKey();
             let filtered = getMergedData(currentMode).filter(i => i.dateKey === todayStr);
             if (filtered.length === 0) { alert('Export Failed: No records available for today.'); return; }
-            let csv = "Serial Number,Date,Channel,Courier,AWB,Time\n";
-            filtered.forEach((i, idx) => { csv += `${filtered.length - idx},${i.date},${i.seller || 'N/A'},${i.courier},'${i.awb},${i.time}\n`; });
+            let csv = "Serial Number,Date,Channel,Courier,AWB,Time,Shiprocket\n";
+            filtered.forEach((i, idx) => { 
+                let isSR = (i.isShiprocket || i.seller === 'Shiprocket') ? 'YES' : 'NO';
+                csv += `${filtered.length - idx},${i.date},${i.seller || 'N/A'},${i.courier},'${i.awb},${i.time},${isSR}\n`; 
+            });
             const link = document.createElement("a"); 
             link.setAttribute("href", encodeURI("data:text/csv;charset=utf-8," + csv)); 
             link.setAttribute("download", `warehouse_export_${currentMode}_${todayStr}.csv`); 
@@ -1061,10 +1141,11 @@
 
                 if (filtered.length === 0) { alert('Query Result Empty: No records found within the specified date parameters.'); return; }
 
-                let csv = "Serial Number,Date,Channel,Courier,AWB,Time\n";
+                let csv = "Serial Number,Date,Channel,Courier,AWB,Time,Shiprocket\n";
                 filtered.forEach((i, idx) => {
-                    csv += `${filtered.length - idx},${i.date},${i.seller || 'N/A'},${i.courier},'${i.awb},${i.time}\n`;
-                    if (mode === 'inward' && (idx + 1) % 20 === 0 && (idx + 1) !== filtered.length) csv += ",,,,,\n"; 
+                    let isSR = (i.isShiprocket || i.seller === 'Shiprocket') ? 'YES' : 'NO';
+                    csv += `${filtered.length - idx},${i.date},${i.seller || 'N/A'},${i.courier},'${i.awb},${i.time},${isSR}\n`;
+                    if (mode === 'inward' && (idx + 1) % 20 === 0 && (idx + 1) !== filtered.length) csv += ",,,,,,,\n"; 
                 });
                 
                 const link = document.createElement("a"); 

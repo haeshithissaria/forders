@@ -582,7 +582,7 @@
                 
                 if (awb.startsWith('SWLOMS') || awb.startsWith('MPP') || awb.startsWith('EPTS') || 
                     awb.startsWith('ANNAP') || awb.startsWith('E8') || awb.startsWith('B3') || 
-                    awb.startsWith('M6A') || awb.startsWith('DA') || awb.length < 8) {
+                    awb.startsWith('M6A') || awb.startsWith('DA') || awb.startsWith('INVOICENO') || awb.length < 8) {
                     
                     playSound('error');
                     showMessage(`❌ INVALID BARCODE: Unrecognized format or length (${awb}). Please scan a valid AWB.`, 'text-white bg-red-600 px-3 py-1 rounded shadow-md');
